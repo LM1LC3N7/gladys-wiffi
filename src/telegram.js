@@ -106,7 +106,7 @@ export function parseTelegram(text) {
   }
   let data;
   try {
-    data = JSON.parse(body.replace(/:\s*-?(?:nan|inf)\s*(?=[,}])/gi, ':null'));
+    data = JSON.parse(body.replace(/("value"\s*:\s*)-?(?:nan|inf)\s*(?=[,}])/gi, '$1null'));
   } catch {
     return { error: 'json' };
   }

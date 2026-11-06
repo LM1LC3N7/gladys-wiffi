@@ -48,25 +48,34 @@ télégramme, reconnaît le Wiffi par son adresse MAC et publie ses valeurs.
 
 ## Ce qui est publié
 
-| Unité du Wiffi                                                  | Dans Gladys                              |
-| --------------------------------------------------------------- | ---------------------------------------- |
-| `gradC`                                                         | température (°C), de -60 à 100           |
-| `%` dont le nom contient « feucht » ou « humid » (sauf « abs ») | humidité (%)                             |
-| `%` dont le nom contient « boden » ou « soil »                  | humidité du sol (%)                      |
-| `mb`                                                            | pression (mbar), de 300 à 1200           |
-| `lux`                                                           | luminosité (lux)                         |
-| `grad`                                                          | angle (°), direction du vent par exemple |
-| `km/h`, `m/s`                                                   | vitesse                                  |
-| booléen dont le nom contient « regen » ou « rain »              | capteur de pluie                         |
-| booléen dont le nom contient « beweg », « motion » ou « pir »   | détecteur de mouvement                   |
-| texte (direction du vent en lettres…)                           | texte                                    |
+| Unité du Wiffi                                                   | Dans Gladys                                                    |
+| ---------------------------------------------------------------- | -------------------------------------------------------------- |
+| `gradC`                                                          | température (°C), de -60 à 100                                 |
+| `%` dont le nom contient « feucht » ou « humid » (sauf « abs »)  | humidité (%)                                                   |
+| `%` dont le nom contient « boden » ou « soil »                   | humidité du sol (%)                                            |
+| `mb`                                                             | pression (mbar), de 300 à 1200                                 |
+| `lux`                                                            | luminosité (lux)                                               |
+| `grad`                                                           | angle (°), de -90 à 360 (direction du vent, hauteur du soleil) |
+| `km/h`, `m/s`                                                    | vitesse                                                        |
+| `mm/h`                                                           | précipitations (mm/h)                                          |
+| `mm` dont le nom contient « heute », « tag », « day » ou « 24 »  | précipitations du jour (mm/jour)                               |
+| `mm` dont le nom contient « stunde », « hour », « 1h » ou « _h » | précipitations de l’heure (mm/h)                               |
+| `ppm`                                                            | CO2 (ppm)                                                      |
+| `ppb`                                                            | COV (ppb)                                                      |
+| booléen dont le nom contient « regen » ou « rain »               | capteur de pluie                                               |
+| booléen dont le nom contient « beweg », « motion » ou « pir »    | détecteur de mouvement                                         |
+| texte (direction du vent en lettres…)                            | texte                                                          |
 
 Rien n’est inventé :
 
 - une valeur vide, `nan`, un texte, un nombre à virgule (« 1,5 ») ou hors de la plage
   de sa nature n’est **pas** publiée (jamais 0 à la place) ;
-- une autre unité (`mm`, `W/m2`, `g/m3`…) ou un autre booléen n’est pas publié :
-  l’état liste ces variables, pour qu’on puisse les ajouter ;
+- une autre unité (`g/m3`…), un `mm` dont le nom ne dit ni le jour ni l’heure (ou
+  dit la veille : « gestern ») ou un autre booléen n’est pas publié : l’état liste ces
+  variables (les 20 premières), pour qu’on puisse les ajouter. Le `W/m2`
+  (rayonnement) n’a pas de catégorie dans Gladys : jamais publié ;
+- un Wiffi n’est gardé (et proposé dans la Découverte) qu’une fois qu’il a envoyé au
+  moins une valeur publiable ;
 - les détails réseau du Wiffi (adresse IP, SSID, signal Wi-Fi) ne sont pas publiés ;
 - si l’unité d’une variable change, la fonction existante n’est plus alimentée et
   l’état le signale.
@@ -81,8 +90,18 @@ Pour qu’un appareil défaillant ou malveillant du réseau ne puisse pas sature
 Gladys : une adresse non autorisée est coupée avant toute lecture ; un télégramme
 est coupé au-delà de 64 Ko ; 16 connexions au plus (4 par adresse, la plus ancienne
 de l’adresse cède la place) ; une connexion est fermée après 5 s sans octet et 15 s
-au total, et après 4 télégrammes ; 60 télégrammes par minute et par adresse (240 en
-tout), le reste est ignoré. Chaque refus est compté dans l’état pendant une heure.
+au total, après 4 télégrammes (un vide compte) et au-delà de 129 Ko ; 60 télégrammes
+par minute et par adresse (240 en tout, les vides comptent), le reste est ignoré.
+Chaque refus est compté dans l’état pendant une heure. Quand Docker montre tous les
+Wiffis sous une seule adresse (sa passerelle), ils se partagent les 60 par minute de
+cette adresse : assez pour des Wiffis qui envoient toutes les quelques secondes, pas
+pour des dizaines.
+
+L’adresse MAC d’un télégramme ne prouve pas qui l’envoie : toute machine autorisée à
+envoyer peut en annoncer une. Listez vos Wiffis dans « Expéditeurs autorisés ». La
+table garde 32 Wiffis : pleine, le Wiffi non créé dans Gladys entendu il y a le plus
+longtemps cède sa place (un Wiffi créé dans Gladys jamais), et un Wiffi jamais créé
+ni entendu depuis un jour est oublié.
 
 ## Sécurité
 

@@ -24,6 +24,14 @@ const REASONS = {
     'over the rate (60 a minute per address)',
     'au-delà du débit (60 par minute et par adresse)',
   ),
+  total: both(
+    'over the total rate (240 a minute for all the addresses)',
+    'au-delà du débit total (240 par minute pour toutes les adresses)',
+  ),
+  nothing: both(
+    'nothing publishable (a new Wiffi is kept only with a supported value)',
+    'rien de publiable (un nouveau Wiffi n’est gardé qu’avec une valeur prise en charge)',
+  ),
   connections: both('over the connection limit', 'au-delà de la limite de connexions'),
   json: both(
     'not JSON (set the Wiffi to send JSON without header)',

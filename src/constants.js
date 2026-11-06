@@ -24,6 +24,8 @@ export const LIMITS = {
   /** Open connections of the receiver, in all and per source address. */
   connections: 16,
   connectionsPerSource: 4,
+  /** Bytes read from one connection, in all (a Wiffi sends one telegram of ~10 KB). */
+  connectionBytes: 2 * 64 * 1024 + 1024,
   /** Telegrams read from one connection (the Wiffi sends one, then closes). */
   telegramsPerConnection: 4,
   /** Telegrams accepted per minute by the receiver, in all and per source address. */
@@ -50,8 +52,8 @@ export const LIMITS = {
   /** Gladys accepts 300 states per minute: a margin is kept. */
   statesPerMinute: 250,
   /** Names listed in the status (silent sensors, unsupported units). */
-  statusNames: 6,
-  statusLength: 900,
+  statusNames: 20,
+  statusLength: 1500,
 };
 
 export const TIMINGS = {
@@ -70,6 +72,8 @@ export const TIMINGS = {
   live: MINUTE,
   /** A telegram older than this is never published (kept while the main container was away). */
   maxAge: 2 * 60 * MINUTE,
+  /** A Wiffi never created in Gladys and not heard for this long is forgotten. */
+  forgetAfter: 24 * 60 * MINUTE,
   /** Default and bounds of the silence delay (configurable, minutes). */
   silenceDefault: 5,
   silenceMin: 2,

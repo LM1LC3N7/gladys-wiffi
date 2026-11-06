@@ -11,6 +11,7 @@ import { assertCoreDevice } from './helpers/coreFeature.js';
 import {
   DEVICE,
   MAC,
+  WALL0,
   WEATHERMAN,
   createDevice,
   feature,
@@ -390,15 +391,70 @@ test('created later: the recent values again, dated; nothing stale at a reconnec
   assert.equal(other.gladys.fake.states.length, 0);
 });
 
-test('32 Wiffis at most; 150 features per Wiffi; the others told, never mixed', async (t) => {
-  const env = await makeApp();
+test('the table of the Wiffis: a flood of MACs never takes the place of a created one', async (t) => {
+  const store = memoryStore();
+  const env = await makeApp({ store });
   t.after(() => env.stop());
-  for (let i = 0; i < 33; i += 1) {
-    const mac = `5C:CF:7F:00:00:${i.toString(16).padStart(2, '0').toUpperCase()}`;
-    await env.send(telegram({ mac }));
-  }
+  const mac = (i) => `5C:CF:7F:00:01:${i.toString(16).padStart(2, '0').toUpperCase()}`;
+  // The real Wiffi, created in Gladys.
+  await env.send(WEATHERMAN);
   await env.time.advance(TIMINGS.discoveryDelay);
+  await createDevice(env);
+  // Unknown variables only: never a place in the table, never offered.
+  const unknown = (m) =>
+    `{"modultyp":"x","vars":[{"homematic_name":"w_strahlung","type":"number","unit":"W/m2","value":"300"}],"Systeminfo":{"MAC-Adresse":"${m}"}}`;
+  for (let i = 0; i < 40; i += 1) await env.send(unknown(mac(i)));
+  await env.time.advance(TIMINGS.saveDelay);
+  assert.deepEqual(Object.keys(env.app.memory.devices), [MAC]);
+  assert.deepEqual(Object.keys(store.data.devices), [MAC]);
+  assert.match(env.status().message.en, /40 telegrams refused: nothing publishable/);
+  // Publishable ones: 32 at most, the oldest not created makes room, never the created one.
+  for (let i = 0; i < 40; i += 1) {
+    await env.time.advance(1000);
+    await env.send(telegram({ mac: mac(i) }));
+  }
+  await env.time.advance(TIMINGS.saveDelay);
+  const kept = Object.keys(env.app.memory.devices);
+  assert.equal(kept.length, 32);
+  assert.ok(kept.includes(MAC), 'the created Wiffi stays');
+  assert.ok(!kept.includes('5ccf7f000100'), 'the oldest flood entry went');
+  assert.ok(kept.includes('5ccf7f000127'), 'the newest is kept');
+  assert.equal(Object.keys(store.data.devices).length, 32);
   assert.equal(env.gladys.fake.discoveredDevices.length, 32);
+  // Never created and not heard for a day: forgotten; the created one stays.
+  await env.time.advance(TIMINGS.forgetAfter + TIMINGS.tick);
+  assert.deepEqual(Object.keys(env.app.memory.devices), [MAC]);
+  await env.time.advance(TIMINGS.saveDelay);
+  assert.deepEqual(Object.keys(store.data.devices), [MAC]);
+});
+
+test('all 32 places taken by Wiffis created in Gladys: a new one is refused and told', async (t) => {
+  const devices = Array.from({ length: 32 }, (_, i) => ({
+    name: `w${i}`,
+    external_id: `ext:wiffi:wiffi:5ccf7f0002${i.toString(16).padStart(2, '0')}`,
+    selector: `w${i}`,
+    features: [],
+  }));
+  const memory = { devices: {} };
+  for (const d of devices) {
+    memory.devices[d.external_id.split(':').at(-1)] = {
+      model: 'weatherman',
+      features: {
+        w_temperatur: {
+          kind: 'number',
+          category: 'temperature-sensor',
+          type: 'decimal',
+          unit: 'celsius',
+          source: 'gradC',
+        },
+      },
+    };
+  }
+  const env = await makeApp({ devices, store: memoryStore(memory) });
+  t.after(() => env.stop());
+  await env.send(WEATHERMAN);
+  await env.time.advance(TIMINGS.discoveryDelay);
+  assert.equal(env.app.memory.devices[MAC], undefined);
   assert.match(env.status().message.en, /refused: more than 32 Wiffis/);
 });
 
@@ -432,4 +488,152 @@ test('a telegram dated in the future is dated now: the silence counts from now',
   await env.send(WEATHERMAN, { age: -10 * MINUTE });
   await env.time.advance(3 * MINUTE + TIMINGS.tick);
   assert.match(env.status().message.en, /silent for 3 min/);
+});
+
+test('rainyman: the rain amounts and the intensity published; W/m2 listed, never published', async (t) => {
+  const env = await makeApp();
+  t.after(() => env.stop());
+  const rain = JSON.stringify({
+    modultyp: 'rainyman',
+    vars: [
+      { homematic_name: 'r_regen', type: 'boolean', unit: '', value: 'true' },
+      { homematic_name: 'r_menge_h', type: 'number', unit: 'mm/h', value: '1.2' },
+      { homematic_name: 'r_heute', type: 'number', unit: 'mm', value: '4.5' },
+      { homematic_name: 'r_pro_h', type: 'number', unit: 'mm', value: '0.8' },
+      { homematic_name: 'r_gestern', type: 'number', unit: 'mm', value: '7' },
+      { homematic_name: 'r_strahlung', type: 'number', unit: 'W/m2', value: '320' },
+    ],
+    Systeminfo: { 'MAC-Adresse': '5C:CF:7F:11:22:33' },
+  });
+  await env.send(rain);
+  await env.time.advance(TIMINGS.discoveryDelay);
+  await createDevice(env);
+  await env.time.advance(TIMINGS.flushInterval);
+  const device = env.gladys.fake.discoveredDevices[0];
+  const unit = (key) => device.features.find((f) => f.external_id.endsWith(`:${key}`))?.unit;
+  assert.equal(unit('r_menge_h'), 'millimeter-per-hour');
+  assert.equal(unit('r_heute'), 'millimeter-per-day');
+  assert.equal(unit('r_pro_h'), 'millimeter-per-hour');
+  assert.equal(unit('r_gestern'), undefined);
+  assert.equal(last(env, 'r_heute').state, 4.5);
+  assert.equal(last(env, 'r_regen').state, 1);
+  assert.equal(env.states(feature('r_strahlung')).length, 0);
+  await env.time.advance(1000);
+  assert.match(env.status().message.en, /r_strahlung \(W\/m2\)/);
+  assert.match(env.status().message.en, /r_gestern \(mm\)/);
+  assertCoreDevice(device, 'rainyman');
+});
+
+test('lastAt kept in /data: after a restart, silent from the last telegram, not from the start', async (t) => {
+  const store = memoryStore();
+  const env = await makeApp({ store, config: { silence_minutes: 5 } });
+  await env.time.advance(MINUTE);
+  await env.send(WEATHERMAN);
+  await env.time.advance(TIMINGS.saveDelay);
+  assert.equal(store.data.devices[MAC].lastAt, WALL0 + MINUTE, 'the time of the telegram');
+  await env.stop();
+  // Restarted (both fake clocks start at WALL0): told as heard 4 min before the start.
+  store.data.devices[MAC].lastAt = WALL0 - 4 * MINUTE;
+  const again = await makeApp({ store, config: { silence_minutes: 5 } });
+  t.after(() => again.stop());
+  await again.time.advance(30_000);
+  assert.equal(again.app.isAlive(MAC), true);
+  await again.time.advance(31_000);
+  assert.equal(again.app.isAlive(MAC), false);
+});
+
+test('clean stop: /data written at once, even with nothing planned', async () => {
+  const store = memoryStore();
+  const env = await makeApp({ store });
+  await env.send(WEATHERMAN);
+  assert.equal(store.saves, 0, 'nothing written yet');
+  await env.stop();
+  assert.equal(store.saves, 1);
+  assert.ok(store.data.devices[MAC]);
+});
+
+test('publisher: a batch Gladys refused is sent again, unless a newer value arrived', async () => {
+  const { StatePublisher } = await import('../src/publisher.js');
+  let fail = true;
+  const sent = [];
+  const publisher = new StatePublisher({
+    gladys: {
+      publishChangedStates: async (batch) => {
+        if (fail) throw new Error('503');
+        sent.push(...batch);
+        return { success: true, count: batch.length };
+      },
+    },
+    now: () => 1_000_000,
+    clock: () => 0,
+    timers: { setInterval: () => 0, clearInterval: () => {} },
+  });
+  publisher.push('ext:w:a', { state: 1 }, 1_000_000);
+  publisher.push('ext:w:b', { state: 2 }, 1_000_000);
+  await assert.rejects(publisher.flush());
+  publisher.push('ext:w:b', { state: 3 }, 1_000_000);
+  fail = false;
+  await publisher.flush();
+  assert.deepEqual(sent.map((s) => [s.device_feature_external_id, s.state]).sort(), [
+    ['ext:w:a', 1],
+    ['ext:w:b', 3],
+  ]);
+});
+
+test('a save planned far away never holds back an earlier one (the earliest wins)', async (t) => {
+  const store = memoryStore();
+  const env = await makeApp({ store });
+  t.after(() => env.stop());
+  await env.send(WEATHERMAN);
+  await env.time.advance(TIMINGS.saveDelay);
+  await env.send(WEATHERMAN); // only lastAt changed: written in 10 min
+  await env.send(telegram({ mac: '5C:CF:7F:00:00:09' })); // a new Wiffi: within 5 s
+  await env.time.advance(TIMINGS.saveDelay);
+  assert.ok(store.data.devices['5ccf7f000009']);
+});
+
+test('an old telegram of another receiver process never moves the last heard back', async (t) => {
+  const env = await makeApp({ config: { silence_minutes: 5 } });
+  t.after(() => env.stop());
+  await env.send(WEATHERMAN);
+  await env.send(WEATHERMAN, { boot: 'fedcba9876543210', seq: 1, age: 4 * MINUTE });
+  await env.time.advance(2 * MINUTE);
+  assert.equal(env.app.isAlive(MAC), true);
+});
+
+test('a new channel secret: a new channel; a receiver start that failed is tried again with the new senders', async (t) => {
+  const env = await makeApp();
+  t.after(() => env.stop());
+  assert.equal(env.channels.length, 1);
+  const real = env.gladys.startContainer.bind(env.gladys);
+  let fail = true;
+  const calls = [];
+  env.gladys.startContainer = async (name, options) => {
+    calls.push(options.env.ALLOWED);
+    if (fail) {
+      fail = false;
+      throw new Error('busy');
+    }
+    return real(name, options);
+  };
+  await env.gladys.fake.configUpdated({
+    allowed_addresses: '10.0.0.7',
+    channel_token: 'n'.repeat(32),
+  });
+  await env.time.settle();
+  assert.deepEqual(calls, ['10.0.0.7']);
+  await env.time.advance(TIMINGS.receiverRetry + TIMINGS.tick);
+  assert.deepEqual(calls, ['10.0.0.7', '10.0.0.7'], 'tried again by the background round');
+  assert.equal(env.channels.length, 2);
+  assert.equal(env.channel.options.token, 'n'.repeat(32));
+});
+
+test('refusals are shown for an hour after the last one, then no more', async (t) => {
+  const env = await makeApp({ config: { allowed_addresses: '192.168.1.60' } });
+  t.after(() => env.stop());
+  await env.send(WEATHERMAN, { from: '192.168.1.50' });
+  await env.time.advance(1000);
+  assert.match(env.status().message.en, /sender not allowed/);
+  await env.time.advance(60 * MINUTE);
+  assert.doesNotMatch(env.status().message.en, /sender not allowed/);
 });

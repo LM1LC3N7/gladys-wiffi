@@ -6,7 +6,8 @@
 //   devices  { <mac>: { model, firmware, address, lastAt, features } }
 //            lastAt: when its last telegram arrived (wall clock: only read
 //            again at start, to tell a Wiffi silent since before the restart)
-//            features: { <key>: { kind, category, type, unit, min, max, name } }
+//            features: { <key>: { kind, category, type, unit, min, max, name, source } }
+//            (source: the unit written by the Wiffi)
 //
 // Never a secret, never a value. Read back bounded, only known keys of the
 // expected shape (never an inherited or `__proto__` key). A file that is not
@@ -117,21 +118,17 @@ const wallTime = (value, now) => (Number.isFinite(value) && value > 0 && value <
 function normalizeSpec(key, raw) {
   const kind = own(raw, 'kind');
   const unitRaw = own(raw, 'unit');
-  const metric = { key, kind, unit: '' };
-  // Find the unit of the telegram back from the Gladys unit.
-  if (kind === 'number') {
-    const units = {
-      celsius: 'gradC',
-      degree: 'grad',
-      'milli-bar': 'mb',
-      lux: 'lux',
-      'kilometer-per-hour': 'km/h',
-      'meter-per-second': 'm/s',
-      percent: '%',
-    };
-    metric.unit =
-      typeof unitRaw === 'string' && Object.hasOwn(units, unitRaw) ? units[unitRaw] : '';
-  }
+  // The unit of the telegram, kept with the feature: the feature is rebuilt
+  // from it exactly as describe() builds it from a telegram.
+  const source = own(raw, 'source');
+  const metric = {
+    key,
+    kind,
+    unit:
+      kind === 'number' && typeof source === 'string' && source.length <= LIMITS.unitLength
+        ? source
+        : '',
+  };
   const expected = describe(metric).spec;
   const spec = {
     kind,
@@ -167,6 +164,7 @@ export function normalizeMemory(raw, now) {
         if (spec) features[key] = spec;
       }
     }
+    if (Object.keys(features).length === 0) continue;
     memory.devices[mac] = {
       model: cleanText(model, 32) ?? 'wiffi',
       firmware: cleanText(firmware, 32) ?? '',

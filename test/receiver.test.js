@@ -72,7 +72,11 @@ test('framer: ends on 0x04 or 0x03, at the end of the stream, cut over the bound
   assert.equal(framer.data(Buffer.from('{"a"')), true);
   assert.equal(framer.data(Buffer.from(':1}\x04\n{"b":2}\x03  \x04{"c"')), true);
   framer.end();
-  assert.deepEqual(frames, ['{"a":1}', '\n{"b":2}', '{"c"']);
+  assert.deepEqual(
+    frames,
+    ['{"a":1}', '\n{"b":2}', '  ', '{"c"'],
+    'a blank frame is handed over (it counts)',
+  );
   const cut = createFramer({
     max: 20,
     onFrame: (t) => frames.push(t),
@@ -83,7 +87,7 @@ test('framer: ends on 0x04 or 0x03, at the end of the stream, cut over the bound
   assert.equal(oversize, 1);
   assert.equal(cut.data(Buffer.from('\x04')), false);
   cut.end();
-  assert.equal(frames.length, 3, 'nothing of the cut telegram');
+  assert.equal(frames.length, 4, 'nothing of the cut telegram');
   const ended = createFramer({
     max: 20,
     onFrame: (t) => frames.push(t),
@@ -94,7 +98,7 @@ test('framer: ends on 0x04 or 0x03, at the end of the stream, cut over the bound
     false,
     'over the bound even with its end',
   );
-  assert.equal(frames.length, 3);
+  assert.equal(frames.length, 4);
   assert.equal(oversize, 2);
 });
 
@@ -273,4 +277,236 @@ test('16 connections in all: the oldest silent one makes room, never one mid-tel
     'newcomer',
   );
   for (const x of sockets) x.destroy();
+});
+
+test('a flood of 0x04 on one connection is cut after 4 frames; bytes per connection bounded', async (t) => {
+  const s = await setup(t);
+  const flood = await s.open();
+  flood.write(Buffer.alloc(1024 * 1024, 0x04));
+  await s.closed(flood);
+  assert.equal(
+    s.messages.filter((m) => m.type === 'telegram').length,
+    0,
+    'blank frames never forwarded',
+  );
+  // Blank frames count in the rate too: 60 a minute for this address in all.
+  for (let i = 0; i < 15; i += 1) {
+    const x = await s.open();
+    x.end('\x04\x04\x04\x04');
+    await s.closed(x);
+  }
+  const real = await s.open();
+  real.end(`${WEATHERMAN}\x04`);
+  await s.until(() => s.messages.some((m) => m.reason === 'rate'), 'rate notice');
+  assert.equal(s.messages.filter((m) => m.type === 'telegram').length, 0, 'over the rate');
+  // Three telegrams of 60 KB on one connection: cut beyond 129 KB, before the third.
+  const other = await setup(t, { IDLE_MS: '5000', LIFE_MS: '15000' });
+  const slow = await other.open('127.0.0.2');
+  let sent = 0;
+  const piece = Buffer.concat([Buffer.alloc(60 * 1024, 0x20), Buffer.from('\x04')]);
+  while (sent < 3 * piece.length && !slow.destroyed) {
+    slow.write(piece);
+    sent += piece.length;
+    await new Promise((r) => setTimeout(r, 30));
+  }
+  await other.closed(slow);
+  await other.until(() => other.messages.some((m) => m.reason === 'size'), 'size notice');
+});
+
+test('the total rate: 240 a minute for all the addresses, then dropped and told', async (t) => {
+  const s = await setup(t);
+  for (let source = 1; source <= 5; source += 1) {
+    for (let i = 0; i < 15; i += 1) {
+      const x = await s.open(`127.0.0.${source}`);
+      x.end(`${WEATHERMAN}\x04`.repeat(4));
+      await s.closed(x);
+    }
+  }
+  await s.until(() => s.messages.some((m) => m.reason === 'total'), 'total notice');
+  assert.equal(s.messages.filter((m) => m.type === 'telegram').length, LIMITS.telegramsPerMinute);
+  assert.equal(s.messages.filter((m) => m.reason === 'total').length, 1, 'told at most every 10 s');
+});
+
+test('the channel: a client without the secret refused; a receiver without it never trusted; lines bounded', async (t) => {
+  const service = await startReceiver({
+    env: {
+      CHANNEL_TOKEN: TOKEN,
+      TCP_PORT: '0',
+      CHANNEL_PORT: '0',
+      TCP_HOST: '127.0.0.1',
+      ALLOWED: '',
+    },
+  });
+  t.after(() => service.stop());
+  // Wrong secret: the receiver closes, nothing is delivered.
+  const wrong = new ChannelClient({
+    host: '127.0.0.1',
+    port: service.channel.port,
+    token: 'w'.repeat(32),
+    delays: [60_000],
+  });
+  t.after(() => wrong.stop());
+  let up = false;
+  wrong.on('up', () => (up = true));
+  wrong.start();
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(up, false);
+  assert.equal(service.channel.connected, false);
+  // A fake receiver that does not know the secret: the client never says up.
+  const { createServer } = await import('node:net');
+  const fakeSockets = new Set();
+  const fake = createServer((socket) => {
+    fakeSockets.add(socket);
+    socket.on('error', () => {});
+    socket.write(`${JSON.stringify({ type: 'challenge', nonce: 'a'.repeat(32) })}\n`);
+    socket.on('data', () => {
+      socket.write(`${JSON.stringify({ type: 'ready', proof: 'b'.repeat(64) })}\n`);
+      socket.write(`${JSON.stringify({ type: 'telegram', body: 'x' })}\n`);
+    });
+  });
+  await new Promise((r) => fake.listen(0, '127.0.0.1', r));
+  t.after(() => {
+    for (const x of fakeSockets) x.destroy();
+    return new Promise((r) => fake.close(r));
+  });
+  const client = new ChannelClient({
+    host: '127.0.0.1',
+    port: fake.address().port,
+    token: TOKEN,
+    delays: [60_000],
+  });
+  t.after(() => client.stop());
+  const got = [];
+  let clientUp = false;
+  client.on('up', () => (clientUp = true));
+  client.on('message', (m) => got.push(m));
+  client.start();
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(clientUp, false);
+  assert.deepEqual(got, []);
+  // A line over 512 KB: the connection is dropped.
+  const good = new ChannelClient({
+    host: '127.0.0.1',
+    port: service.channel.port,
+    token: TOKEN,
+    delays: [60_000],
+  });
+  t.after(() => good.stop());
+  const upGood = once(good, 'up');
+  good.start();
+  await Promise.race([upGood, within(3000, 'up')]);
+  const down = once(good, 'down');
+  service.channel.send({ type: 'telegram', body: 'x'.repeat(600 * 1024) });
+  await Promise.race([down, within(3000, 'dropped on a long line')]);
+});
+
+test('the queue while the main container is away: 64 kept, the oldest dropped', async (t) => {
+  const { createChannelServer } = await import('../src/channel.js');
+  const server = createChannelServer({
+    port: 0,
+    host: '127.0.0.1',
+    token: TOKEN,
+    queueSize: LIMITS.queue,
+  });
+  await server.start();
+  t.after(() => server.stop());
+  for (let i = 1; i <= 70; i += 1) server.send({ type: 'telegram', seq: i });
+  const client = new ChannelClient({ host: '127.0.0.1', port: server.port, token: TOKEN });
+  t.after(() => client.stop());
+  const got = [];
+  let info;
+  client.on('up', (i) => (info = i));
+  client.on('message', (m) => got.push(m.seq));
+  client.start();
+  const end = Date.now() + 3000;
+  while (got.length < 64 && Date.now() < end) await new Promise((r) => setTimeout(r, 10));
+  assert.equal(got.length, 64);
+  assert.equal(got[0], 7);
+  assert.equal(info.dropped, 6);
+});
+
+test('the receiver keeps 64 telegrams at most while the main container is away', async (t) => {
+  const service = await startReceiver({
+    env: {
+      CHANNEL_TOKEN: TOKEN,
+      TCP_PORT: '0',
+      CHANNEL_PORT: '0',
+      TCP_HOST: '127.0.0.1',
+      ALLOWED: '',
+    },
+  });
+  t.after(() => service.stop());
+  for (let source = 1; source <= 5; source += 1) {
+    for (let i = 0; i < 4; i += 1) {
+      const x = await new Promise((resolve) => {
+        const c = connect(
+          { host: '127.0.0.1', port: service.port, localAddress: `127.0.0.${source}` },
+          () => resolve(c),
+        );
+      });
+      x.end(`${WEATHERMAN}\x04`.repeat(4));
+      await new Promise((r) => x.once('close', r));
+    }
+  }
+  const client = new ChannelClient({ host: '127.0.0.1', port: service.channel.port, token: TOKEN });
+  t.after(() => client.stop());
+  const got = [];
+  client.on('message', (m) => got.push(m));
+  client.start();
+  const end = Date.now() + 3000;
+  while (got.length < 64 && Date.now() < end) await new Promise((r) => setTimeout(r, 10));
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(got.length, LIMITS.queue);
+  assert.equal(got[0].seq, 80 - LIMITS.queue + 1, 'the oldest dropped');
+});
+
+test('16 connections all mid-telegram: the oldest goes for a newcomer', async (t) => {
+  const s = await setup(t);
+  const sockets = [];
+  for (let source = 1; source <= 4; source += 1) {
+    for (let i = 0; i < LIMITS.connectionsPerSource; i += 1) {
+      const x = await s.open(`127.0.0.${source}`);
+      x.write('{"modultyp":');
+      sockets.push(x);
+    }
+  }
+  await s.until(() => s.service.connections === LIMITS.connections, 'sixteen open');
+  await new Promise((r) => setTimeout(r, 50));
+  const newcomer = await s.open('127.0.0.9');
+  await s.closed(sockets[0]);
+  newcomer.end(`${WEATHERMAN}\x04`);
+  await s.until(
+    () => s.messages.some((m) => m.type === 'telegram' && m.from === '127.0.0.9'),
+    'newcomer',
+  );
+  for (const x of sockets) x.destroy();
+});
+
+test('the channel server answers a wrong proof by closing, never with ready', async (t) => {
+  const service = await startReceiver({
+    env: {
+      CHANNEL_TOKEN: TOKEN,
+      TCP_PORT: '0',
+      CHANNEL_PORT: '0',
+      TCP_HOST: '127.0.0.1',
+      ALLOWED: '',
+    },
+  });
+  t.after(() => service.stop());
+  const socket = connect({ host: '127.0.0.1', port: service.channel.port });
+  socket.on('error', () => {});
+  t.after(() => socket.destroy());
+  let text = '';
+  socket.setEncoding('utf8');
+  socket.on('data', (chunk) => {
+    text += chunk;
+    if (text.includes('challenge') && !text.includes('hello-sent')) {
+      text += 'hello-sent';
+      socket.write(
+        `${JSON.stringify({ type: 'hello', nonce: 'c'.repeat(32), proof: 'd'.repeat(64) })}\n`,
+      );
+    }
+  });
+  await Promise.race([new Promise((r) => socket.once('close', r)), within(3000, 'closed')]);
+  assert.doesNotMatch(text, /ready/);
 });

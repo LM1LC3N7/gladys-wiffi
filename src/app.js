@@ -83,6 +83,8 @@ export class WiffiApp {
     this.channelUp = false;
     this.configAttempt = 0;
     this.timersById = {};
+    /** name -> monotonic time a soon() run is due */
+    this.dueAt = {};
     this.tickTimer = undefined;
     this.startMono = this.clock();
     /** mac -> monotonic time its last telegram arrived */
@@ -122,9 +124,12 @@ export class WiffiApp {
     }, delay);
   }
 
-  /** Like later(), but an already planned run is kept (the earliest wins). */
+  /** Like later(), but when a run is already planned, the earliest of the two is kept. */
   soon(name, delay, fn) {
-    if (!this.timersById[name]) this.later(name, delay, fn);
+    const due = this.clock() + delay;
+    if (this.timersById[name] && this.dueAt[name] <= due) return;
+    this.dueAt[name] = due;
+    this.later(name, delay, fn);
   }
 
   clearTimers() {
@@ -409,7 +414,7 @@ export class WiffiApp {
   }
 
   onRefused(message) {
-    const reasons = ['source', 'size', 'rate', 'connections'];
+    const reasons = ['source', 'size', 'rate', 'total', 'connections'];
     if (!reasons.includes(message.reason)) return;
     this.countRefused(message.reason, typeof message.from === 'string' ? message.from : '');
   }
@@ -451,7 +456,16 @@ export class WiffiApp {
     let entry = this.memory.devices[mac];
     let structure = false;
     if (!entry) {
-      if (Object.keys(this.memory.devices).length >= LIMITS.devices) {
+      // A Wiffi is remembered only with something to publish: a telegram of
+      // unknown variables never takes a place in the table (nor in /data).
+      if (!parsed.metrics.some((metric) => describe(metric).spec)) {
+        for (const metric of parsed.metrics) {
+          if (describe(metric).skip === 'unit') this.noteUnsupported(metric);
+        }
+        this.countRefused('nothing', from);
+        return;
+      }
+      if (Object.keys(this.memory.devices).length >= LIMITS.devices && !this.evictOne()) {
         this.countRefused('devices', from);
         return;
       }
@@ -536,6 +550,60 @@ export class WiffiApp {
     this.statusSoon();
   }
 
+  // --- The table of the Wiffis ------------------------------------------------------------------
+
+  /** When a Wiffi was last heard (monotonic), -Infinity when never since the start. */
+  lastHeard(mac) {
+    return this.heard.get(mac) ?? -Infinity;
+  }
+
+  /**
+   * The table is full: the Wiffi not created in Gladys heard the longest ago
+   * makes room. A Wiffi created in Gladys is never pushed out by another one.
+   * @returns {boolean} whether a place was freed.
+   */
+  evictOne() {
+    let oldest;
+    for (const mac of Object.keys(this.memory.devices)) {
+      if (this.created.has(this.ids(mac).device)) continue;
+      if (oldest === undefined || this.lastHeard(mac) < this.lastHeard(oldest)) oldest = mac;
+    }
+    if (oldest === undefined) return false;
+    this.forgetWiffi(oldest);
+    return true;
+  }
+
+  /** Wiffis never created in Gladys and not heard for a day: forgotten (memory and /data). */
+  purgeForgotten(mono = this.clock()) {
+    let removed = false;
+    for (const mac of Object.keys(this.memory.devices)) {
+      if (this.created.has(this.ids(mac).device)) continue;
+      const heard = this.heard.get(mac) ?? this.startMono;
+      if (mono - heard >= TIMINGS.forgetAfter) {
+        this.forgetWiffi(mac);
+        removed = true;
+      }
+    }
+    return removed;
+  }
+
+  forgetWiffi(mac) {
+    const entry = this.memory.devices[mac];
+    if (!entry) return;
+    const ids = this.ids(mac);
+    for (const key of Object.keys(entry.features)) {
+      this.valid.delete(ids.feature(key));
+      this.lastValues.delete(ids.feature(key));
+    }
+    delete this.memory.devices[mac];
+    this.heard.delete(mac);
+    this.lastOrder.delete(mac);
+    this.changed.delete(mac);
+    this.logger.info(`Wiffi ${formatMac(mac)} forgotten (never created in Gladys)`);
+    this.soon('discovery', TIMINGS.discoveryDelay, () => this.publishDiscovery());
+    this.saveSoon(TIMINGS.saveDelay);
+  }
+
   // --- Silence -------------------------------------------------------------------------------
 
   silenceMs() {
@@ -603,14 +671,17 @@ export class WiffiApp {
   }
 
   async publishDiscovery() {
-    const devices = Object.entries(this.memory.devices).map(([mac, entry]) =>
-      buildDevice(
-        (type, id) => this.gladys.externalIds(type, id),
-        mac,
-        entry,
-        this.created.get(this.ids(mac).device),
-      ),
-    );
+    // A Wiffi without any feature is never offered (nothing to create).
+    const devices = Object.entries(this.memory.devices)
+      .filter(([, entry]) => Object.keys(entry.features).length > 0)
+      .map(([mac, entry]) =>
+        buildDevice(
+          (type, id) => this.gladys.externalIds(type, id),
+          mac,
+          entry,
+          this.created.get(this.ids(mac).device),
+        ),
+      );
     try {
       await this.gladys.publishDiscoveredDevices(devices);
     } catch (err) {
@@ -700,6 +771,7 @@ export class WiffiApp {
     ) {
       await this.ensureReceiver();
     }
+    if (this.purgeForgotten()) this.statusSoon();
     await this.publishTransports();
     await this.updateStatus();
   }

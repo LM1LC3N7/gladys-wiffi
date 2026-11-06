@@ -13,6 +13,7 @@ const D = 'src/model.js';
 const P = 'src/publisher.js';
 const S = 'src/store.js';
 const C = 'src/config.js';
+const Ch = 'src/channel.js';
 
 export const MUTANTS = [
   // --- The receiver
@@ -220,4 +221,172 @@ export const MUTANTS = [
     'config: broadcast allowed',
   ),
   M(C, '    return isPrivate(ip);\n', '    return true;\n', 'config: empty list = everyone'),
+  // --- Review r1 (the reviewer's mutants, adapted to the corrected code, and the corrections')
+  M(R, "if (window.length >= LIMITS.telegramsPerMinute) return 'total';", '', 'r1: no total rate'),
+  M(
+    R,
+    '!evict((s) => s.wiffiTelegrams === 0)',
+    '!evict(() => false)',
+    'r1: mid-telegram never evicted, newcomer refused',
+  ),
+  M(
+    R,
+    'if (mono - (lastNotice.get(reason) ?? -Infinity) < TIMINGS.refusedNotice) return;',
+    '',
+    'r1: refusal notices unthrottled',
+  ),
+  M(R, '      framer.end();\n', '', 'r1: telegram without 0x04 lost'),
+  M(R, 'queueSize: LIMITS.queue,', 'queueSize: 1e9,', 'r1: unbounded queue'),
+  M(
+    R,
+    "if (!ended && text.trim() === '') return true;",
+    "if (text.trim() === '') return true;",
+    'r1: blank frames not counted',
+  ),
+  M(R, "} else if (text.trim() !== '') {", '} else {', 'r1: blank frames forwarded'),
+  M(
+    R,
+    'if (received > LIMITS.connectionBytes) {',
+    'if (false) {',
+    'r1: bytes per connection unbounded',
+  ),
+  M(
+    R,
+    'if (!bySource.has(from) && bySource.size >= LIMITS.sources) bySource.clear();',
+    '',
+    'r1: sources table unbounded',
+    'only memory: 256 sources at 60/min need more than the 240/min total allows to matter; no observable behaviour',
+  ),
+  M(
+    R,
+    'tcp.maxConnections = LIMITS.connections * 4;',
+    '',
+    'r1: no hard connection cap',
+    'a backstop under the 16 managed connections, which are evicted or refused first',
+  ),
+  M(
+    Ch,
+    "sameProof(object.proof, proof(secret, 'client', serverNonce, object.nonce))",
+    'true',
+    'r1: server accepts any client',
+  ),
+  M(
+    Ch,
+    "!sameProof(object.proof, proof(this.secret, 'server', clientNonce, serverNonce))",
+    'false',
+    'r1: client accepts any server',
+  ),
+  M(
+    Ch,
+    'if (line.length > MAX_LINE) {',
+    'if (false) {',
+    'r1: no line bound',
+    'the bound on the unfinished line (size > MAX_LINE) cuts any long line first: loopback chunks are far smaller than 512 KB',
+  ),
+  M(A, '    entry.lastAt = sent;\n', '', 'r1: lastAt never kept'),
+  M(
+    A,
+    'this.heard.set(mac, Math.max(this.heard.get(mac) ?? -Infinity, heardAt));',
+    'this.heard.set(mac, heardAt);',
+    'r1: heard may go back',
+  ),
+  M(
+    A,
+    'this.store.save(serializeMemory(this.memory)).catch(() => {}),',
+    'Promise.resolve(),',
+    'r1: no /data write at clean stop',
+  ),
+  M(
+    A,
+    'if (this.channel && this.channel.secret === this.token) return;',
+    'if (this.channel) return;',
+    'r1: channel kept with a new secret',
+  ),
+  M(
+    A,
+    'this.lastReceiverEnv !== JSON.stringify(this.receiverEnv())',
+    'false',
+    'r1: receiver not restarted on env change by tick',
+    'every failed startContainer sets the status to error, which the round retries anyway',
+  ),
+  M(
+    A,
+    'if (this.unsupported.size >= 50) return;',
+    '',
+    'r1: unsupported list unbounded',
+    'the status shows 20 names either way: the bound only caps memory',
+  ),
+  M(
+    A,
+    '?? this.startMono;\n      if (mono - valid >= this.silenceMs()) mute.push(key);',
+    '?? Infinity;\n      if (mono - valid >= this.silenceMs()) mute.push(key);',
+    'r1: never-valid sensor not named',
+  ),
+  M(
+    A,
+    'if (mono - entry.last < REFUSED_SHOWN) refused[reason] = entry;',
+    'refused[reason] = entry;',
+    'r1: refusals shown forever',
+  ),
+  M(P, 'if (!this.pending.has(id)) this.pending.set(id, entry);', '', 'r1: failed batch lost'),
+  M(
+    C,
+    'Math.max(TIMINGS.silenceMin, Math.round(value))',
+    'Math.round(value)',
+    'r1: silence below 2 min',
+  ),
+  M(C, 'if (parts.length > LIMITS.allowedAddresses) {', 'if (false) {', 'r1: unbounded list'),
+  M(
+    T,
+    "if (Buffer.byteLength(text, 'utf8') > LIMITS.telegramBytes) {",
+    'if (false) {',
+    'r1: no size check in the parser',
+  ),
+  M(T, '|| seen.has(key)', '', 'r1: duplicate names kept'),
+  M(
+    D,
+    "if (typeof feature?.external_id === 'string' && !known.has(feature.external_id)) {",
+    'if (false) {',
+    'r1: created features lost at republication',
+  ),
+  M(
+    D,
+    "  'mm/h': sensor('precipitation-sensor', 'decimal', 'millimeter-per-hour', 0, 500),\n",
+    '',
+    'r1: no mm/h',
+  ),
+  M(D, '  [/gestern|yesterday|vortag/i, undefined],\n', '', 'r1: yesterday published as today'),
+  M(D, "  ppm: sensor('co2-sensor', 'decimal', 'ppm', 0, 10_000),\n", '', 'r1: no ppm'),
+  M(
+    A,
+    '      if (!parsed.metrics.some((metric) => describe(metric).spec)) {',
+    '      if (false) {',
+    'r1: a Wiffi without feature takes a place',
+  ),
+  M(
+    A,
+    '    let oldest;\n    for (const mac of Object.keys(this.memory.devices)) {\n      if (this.created.has(this.ids(mac).device)) continue;',
+    '    let oldest;\n    for (const mac of Object.keys(this.memory.devices)) {',
+    'r1: a created Wiffi evicted',
+  ),
+  M(A, 'if (mono - heard >= TIMINGS.forgetAfter) {', 'if (false) {', 'r1: never forgotten'),
+  M(
+    A,
+    '.filter(([, entry]) => Object.keys(entry.features).length > 0)',
+    '.filter(() => true)',
+    'r1: empty Wiffi offered',
+    'an entry is created with a feature and /data drops empty ones: the filter is a backstop',
+  ),
+  M(
+    A,
+    'if (this.timersById[name] && this.dueAt[name] <= due) return;',
+    'if (this.timersById[name]) return;',
+    'r1: soon keeps the latest',
+  ),
+  M(
+    S,
+    '    if (Object.keys(features).length === 0) continue;\n',
+    '',
+    'r1: empty Wiffi read back from /data',
+  ),
 ];

@@ -2,12 +2,16 @@
 // From a variable of a telegram to a Gladys feature, and the devices.
 //
 // Units: the ones the Home Assistant wiffi integration maps (`gradC`, `grad`,
-// `%`, `mb`, `lux`, from its wiffi_strings.py) plus the speeds the device
-// writes literally (`km/h`, `m/s`). A `%` is a humidity or a soil moisture
-// only when the name says so. A boolean is a rain or a motion sensor only
-// when the name says so. Any other number or boolean is not published (the
-// status lists it): never a guessed unit. A text (wind direction, ...) is a
-// read-only text feature, except the network details of the device.
+// `%`, `mb`, `lux`, from its wiffi_strings.py) plus the ones the device
+// writes literally and the core carries: `km/h`, `m/s` (speed), `mm/h`
+// (precipitation per hour), `ppm` (CO2), `ppb` (VOC). A `mm` is a rain
+// amount of the day or of the hour only when its name says so (a total of
+// yesterday is not published). A `%` is a humidity or a soil moisture only
+// when the name says so. A boolean is a rain or a motion sensor only when the
+// name says so. Any other number or boolean is not published (the status
+// lists it): never a guessed unit. `W/m2` (radiation) has no category in
+// Gladys. A text (wind direction, ...) is a read-only text feature, except
+// the network details of the device.
 //
 // Bounds: a value outside the range of its kind is no measurement (a sensor
 // unplugged reports nonsense), it is not published.
@@ -23,12 +27,25 @@ const sensor = (category, type, unit, min, max) => ({ category, type, unit, min,
 
 const BY_UNIT = {
   gradC: sensor('temperature-sensor', 'decimal', 'celsius', -60, 100),
-  grad: sensor('angle-sensor', 'decimal', 'degree', -360, 360),
+  // A wind direction (0-360) or a sun elevation (-90-90).
+  grad: sensor('angle-sensor', 'decimal', 'degree', -90, 360),
   mb: sensor('pressure-sensor', 'decimal', 'milli-bar', 300, 1200),
   lux: sensor('light-sensor', 'decimal', 'lux', 0, 200_000),
   'km/h': sensor('speed-sensor', 'decimal', 'kilometer-per-hour', 0, 400),
   'm/s': sensor('speed-sensor', 'decimal', 'meter-per-second', 0, 120),
+  'mm/h': sensor('precipitation-sensor', 'decimal', 'millimeter-per-hour', 0, 500),
+  ppm: sensor('co2-sensor', 'decimal', 'ppm', 0, 10_000),
+  ppb: sensor('voc-sensor', 'decimal', 'ppb', 0, 100_000),
 };
+
+const MM = [
+  [/gestern|yesterday|vortag/i, undefined],
+  [/heute|tag|day|24/i, sensor('precipitation-sensor', 'decimal', 'millimeter-per-day', 0, 1000)],
+  [
+    /stunde|hour|1h|(^|_)(pro_)?h($|_)/i,
+    sensor('precipitation-sensor', 'decimal', 'millimeter-per-hour', 0, 500),
+  ],
+];
 
 const PERCENT = [
   [/boden|soil/i, sensor('soil-moisture-sensor', 'decimal', 'percent', 0, 100)],
@@ -61,7 +78,10 @@ export function describe(metric) {
   if (metric.unit === '%' && !/abs/i.test(metric.key)) {
     spec = PERCENT.find(([name]) => name.test(metric.key))?.[1];
   }
-  return spec ? { spec: { kind: 'number', ...spec } } : { skip: 'unit' };
+  if (metric.unit === 'mm') {
+    spec = MM.find(([name]) => name.test(metric.key))?.[1];
+  }
+  return spec ? { spec: { kind: 'number', ...spec, source: metric.unit } } : { skip: 'unit' };
 }
 
 /** Two specs describe the same feature (a changed unit is another feature). */

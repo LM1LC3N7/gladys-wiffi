@@ -13,9 +13,10 @@ receiver and the real channel on the loopback.
   (weatherman, rainyman, airsniffer, wiffi-wz, pulsecounter), how often each one
   sends, whether a firmware sends `nan` or other placeholders, whether 0x03 is
   still used as an end.
-- Units met in the field and not mapped yet (`mm`, `W/m2`, `g/m3`, `ppm`, `dBm`…):
-  the status lists them; add each one only with its meaning confirmed (a rain
-  amount per hour or per day is not the same feature).
+- Units met in the field and not mapped yet (`g/m3`, a `mm` named neither for the
+  day nor for the hour…): the status lists them; add each one only with its meaning
+  confirmed. The exact variable names of the Rainyman are not checked (manufacturer
+  documentation not read): the day/hour rule on the name is a guess to confirm.
 - Counters (`_heute`, `_pro_h`, pulse counter): never published as an energy index
   before their meaning and their reset are known.
 - Commands (buzzer, relays of some Wiffis): out of scope, read only.
@@ -33,8 +34,11 @@ receiver and the real channel on the loopback.
   not worked around, the manufacturer's documentation was not read.
 - **Neighbour**: gladys-nasweb (receiver sub-container, HMAC channel taken as is,
   publisher, status), read only.
-- **Units**: only the ones the references map (`gradC`, `grad`, `%`, `mb`, `lux`)
-  and the speeds the device writes literally (`km/h`, `m/s`). `grad` goes to
+- **Units**: the ones the references map (`gradC`, `grad`, `%`, `mb`, `lux`) and
+  the ones the device writes literally and the core carries (`km/h`, `m/s`, `mm/h`,
+  `ppm` -> CO2, `ppb` -> VOC); `mm` by its name (day or hour; yesterday never). A
+  daily rain total that falls to 0 at midnight is a real value, not an index.
+  `W/m2` has no category in Gladys (review r1). `grad` goes to
   `angle-sensor` with the unit `degree`, as the core's Netatmo integration does
   (the core has no unit list for that category). A `%` is a humidity or a soil
   moisture only by its name, else not published.
@@ -45,5 +49,9 @@ receiver and the real channel on the loopback.
 - **Freshness**: dated by the receiver when it arrives; older than the last
   applied for the Wiffi: ignored; waited over a minute: published with its date;
   over 2 h: dropped. The silence is decided on the monotonic clock.
+- **Table of the Wiffis** (review r1): a Wiffi enters only with a publishable value;
+  full (32), the one not created in Gladys heard the longest ago makes room; never
+  created and silent for 24 h: forgotten. The MAC is no authentication: the docs
+  recommend the allowed senders.
 - **No action, no command handler**: the integration is read only.
 - **Not in the manifest**: `keywords`, `countries` (not used by the store yet).

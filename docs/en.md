@@ -46,25 +46,34 @@ recognizes the Wiffi by its MAC address and publishes its values.
 
 ## What is published
 
-| Wiffi unit                                           | In Gladys                                 |
-| ---------------------------------------------------- | ----------------------------------------- |
-| `gradC`                                              | temperature (°C), -60 to 100              |
-| `%` whose name holds "feucht" or "humid" (not "abs") | humidity (%)                              |
-| `%` whose name holds "boden" or "soil"               | soil moisture (%)                         |
-| `mb`                                                 | pressure (mbar), 300 to 1200              |
-| `lux`                                                | brightness (lux)                          |
-| `grad`                                               | angle (°), the wind direction for example |
-| `km/h`, `m/s`                                        | speed                                     |
-| boolean whose name holds "regen" or "rain"           | rain sensor                               |
-| boolean whose name holds "beweg", "motion" or "pir"  | motion sensor                             |
-| text (wind direction in letters…)                    | text                                      |
+| Wiffi unit                                           | In Gladys                                             |
+| ---------------------------------------------------- | ----------------------------------------------------- |
+| `gradC`                                              | temperature (°C), -60 to 100                          |
+| `%` whose name holds "feucht" or "humid" (not "abs") | humidity (%)                                          |
+| `%` whose name holds "boden" or "soil"               | soil moisture (%)                                     |
+| `mb`                                                 | pressure (mbar), 300 to 1200                          |
+| `lux`                                                | brightness (lux)                                      |
+| `grad`                                               | angle (°), -90 to 360 (wind direction, sun elevation) |
+| `km/h`, `m/s`                                        | speed                                                 |
+| `mm/h`                                               | precipitation (mm/h)                                  |
+| `mm` whose name holds "heute", "tag", "day" or "24"  | precipitation of the day (mm/day)                     |
+| `mm` whose name holds "stunde", "hour", "1h" or "_h" | precipitation of the hour (mm/h)                      |
+| `ppm`                                                | CO2 (ppm)                                             |
+| `ppb`                                                | VOC (ppb)                                             |
+| boolean whose name holds "regen" or "rain"           | rain sensor                                           |
+| boolean whose name holds "beweg", "motion" or "pir"  | motion sensor                                         |
+| text (wind direction in letters…)                    | text                                                  |
 
 Nothing is made up:
 
 - an empty value, `nan`, a text, a comma decimal ("1,5") or a value outside the
   range of its kind is **not** published (never a 0 instead);
-- another unit (`mm`, `W/m2`, `g/m3`…) or another boolean is not published: the
-  status lists these variables, so they can be added;
+- another unit (`g/m3`…), a `mm` whose name says neither the day nor the hour (or
+  says yesterday: "gestern"), or another boolean is not published: the status lists
+  these variables (the first 20), so they can be added. `W/m2` (radiation) has no
+  category in Gladys: never published;
+- a Wiffi is kept (and offered in the Discovery) only once it sent at least one
+  value it can publish;
 - the network details of the Wiffi (IP address, SSID, Wi-Fi signal) are not
   published;
 - when the unit of a variable changes, the existing feature is no longer fed and
@@ -79,9 +88,18 @@ published. A telegram older than the last one applied is ignored.
 So that a faulty or hostile device of the network cannot flood Gladys: an address
 not allowed is closed before anything is read; a telegram is cut beyond 64 KB; 16
 connections at most (4 per address, the oldest of the address makes room); a
-connection is closed after 5 s without a byte and 15 s in all, and after 4
-telegrams; 60 telegrams a minute per address (240 in all), the rest is ignored.
-Each refusal is counted in the status for an hour.
+connection is closed after 5 s without a byte and 15 s in all, after 4 telegrams
+(an empty one counts) and beyond 129 KB; 60 telegrams a minute per address (240 in
+all, empty ones count), the rest is ignored. Each refusal is counted in the status
+for an hour. When Docker shows every Wiffi under one address (its gateway), they
+share the 60 a minute of that address: enough for Wiffis sending every few seconds,
+not for dozens of them.
+
+The MAC address of a telegram is not a proof of who sent it: any machine allowed to
+send can claim one. List your Wiffis in "Allowed senders". The table holds 32 Wiffis:
+when it is full, the Wiffi not created in Gladys heard the longest ago makes room (a
+Wiffi created in Gladys never does), and a Wiffi never created and not heard for a
+day is forgotten.
 
 ## Security
 

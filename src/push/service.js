@@ -15,11 +15,12 @@
 //     total, the oldest that has sent nothing, else the oldest that has not
 //     sent a whole telegram, else the newcomer;
 //   - a connection is closed after 5 s without a byte and after 15 s in
-//     all, after 4 telegrams;
+//     all, after 4 frames (a blank one counts) and beyond 129 KB;
 //   - a telegram is cut at 64 KB without its end (the connection closed,
 //     nothing forwarded); the end is 0x04 (0x03 accepted too), or the end
 //     of the connection;
-//   - 240 telegrams a minute in all, 60 per source address: beyond, dropped.
+//   - 240 frames a minute in all, 60 per source address (a blank one
+//     counts): beyond, dropped.
 // Each refusal is told to the main container (at most every 10 s per
 // reason), with the source address only, never the content. Each telegram
 // carries the wall time it arrived (its date) and its number in this process
@@ -61,9 +62,11 @@ export function createFramer({ max = LIMITS.telegramBytes, onFrame, onOversize }
   let parts = [];
   let size = 0;
   let dead = false;
-  const emit = (buffer) => {
+  // A frame ended by its byte is always handed over, even blank (it counts in
+  // the limits); what is left blank at the end of the stream is no frame.
+  const emit = (buffer, ended = true) => {
     const text = buffer.toString('utf8');
-    if (text.trim() === '') return true;
+    if (!ended && text.trim() === '') return true;
     return onFrame(text) !== false;
   };
   return {
@@ -104,7 +107,7 @@ export function createFramer({ max = LIMITS.telegramBytes, onFrame, onOversize }
     end() {
       if (dead || size === 0) return;
       dead = true;
-      emit(Buffer.concat(parts, size));
+      emit(Buffer.concat(parts, size), false);
     },
   };
 }
@@ -154,18 +157,17 @@ export async function startReceiver({
     );
   };
 
-  /** Within the minute budget, in all and for this source. */
-  const withinRate = (from, time) => {
+  /** Within the minute budget: null, or the limit passed ('total' or 'rate', per source). */
+  const overRate = (from, time) => {
     window = window.filter((t) => time - t < 60_000);
     const mine = (bySource.get(from) ?? []).filter((t) => time - t < 60_000);
-    if (window.length >= LIMITS.telegramsPerMinute || mine.length >= LIMITS.telegramsPerSource) {
-      return false;
-    }
+    if (window.length >= LIMITS.telegramsPerMinute) return 'total';
+    if (mine.length >= LIMITS.telegramsPerSource) return 'rate';
     window.push(time);
     mine.push(time);
     if (!bySource.has(from) && bySource.size >= LIMITS.sources) bySource.clear();
     bySource.set(from, mine);
-    return true;
+    return null;
   };
 
   const evict = (which) => {
@@ -209,10 +211,12 @@ export async function startReceiver({
     const life = setTimeout(() => socket.destroy(), lifeMs);
     const framer = createFramer({
       onFrame: (text) => {
+        // Every frame counts, a blank one too (a flood of 0x04 is cut at once).
         socket.wiffiTelegrams += 1;
-        if (!withinRate(from, clock())) {
-          notice('rate', from);
-        } else {
+        const over = overRate(from, clock());
+        if (over) {
+          notice(over, from);
+        } else if (text.trim() !== '') {
           seq += 1;
           channel.send({
             type: 'telegram',
@@ -231,8 +235,15 @@ export async function startReceiver({
       },
       onOversize: () => notice('size', from),
     });
+    let received = 0;
     socket.on('data', (chunk) => {
       clearTimeout(idle);
+      received += chunk.length;
+      if (received > LIMITS.connectionBytes) {
+        notice('size', from);
+        socket.destroy();
+        return;
+      }
       if (!framer.data(chunk)) {
         socket.destroy();
         return;

@@ -110,7 +110,23 @@ test('mapping: only the known units; names decide % and booleans; network detail
   assert.equal(d('w_feuchte_rel', 'number', '%').spec.category, 'humidity-sensor');
   assert.equal(d('w_feuchte_abs', 'number', '%').skip, 'unit');
   assert.equal(d('w_akku', 'number', '%').skip, 'unit');
-  assert.equal(d('w_regen_mm', 'number', 'mm').skip, 'unit');
+  assert.equal(d('w_regen_mm', 'number', 'mm').skip, 'unit', 'neither a day nor an hour');
+  assert.equal(d('r_menge_heute', 'number', 'mm').spec.unit, 'millimeter-per-day');
+  assert.equal(d('r_regen_24h', 'number', 'mm').spec.unit, 'millimeter-per-day');
+  assert.equal(d('r_pro_h', 'number', 'mm').spec.unit, 'millimeter-per-hour');
+  assert.equal(d('r_menge_stunde', 'number', 'mm').spec.unit, 'millimeter-per-hour');
+  assert.equal(d('r_menge_gestern', 'number', 'mm').skip, 'unit', 'yesterday is not today');
+  assert.equal(
+    d('r_tag_gestern', 'number', 'mm').skip,
+    'unit',
+    'yesterday, even named for the day',
+  );
+  assert.equal(d('r_intens', 'number', 'mm/h').spec.category, 'precipitation-sensor');
+  assert.equal(d('r_intens', 'number', 'mm/h').spec.source, 'mm/h');
+  assert.equal(d('a_co2', 'number', 'ppm').spec.category, 'co2-sensor');
+  assert.equal(d('a_voc', 'number', 'ppb').spec.category, 'voc-sensor');
+  assert.equal(d('w_strahlung', 'number', 'W/m2').skip, 'unit', 'no category for radiation');
+  assert.equal(d('w_ip_num', 'number', 'gradC').skip, 'private', 'network details, numbers too');
   assert.equal(d('w_x', 'number', '').skip, 'unit');
   assert.equal(d('w_bewegung', 'boolean').spec.category, 'motion-sensor');
   assert.equal(d('w_relais', 'boolean').skip, 'unit');
@@ -122,6 +138,9 @@ test('mapping: only the known units; names decide % and booleans; network detail
   assert.deepEqual(stateOf(temp, 21.5), { state: 21.5 });
   assert.equal(stateOf(temp, -99), null, 'a probe unplugged');
   assert.equal(stateOf(temp, 150), null);
+  const wind = d('w_dir', 'number', 'grad').spec;
+  assert.deepEqual(stateOf(wind, 360), { state: 360 });
+  assert.equal(stateOf(wind, -91), null);
   assert.equal(stateOf(temp, null), null);
   assert.deepEqual(stateOf(d('s', 'string').spec, 'NO'), { text: 'NO' });
   assert.equal(stateOf(d('s', 'string').spec, 3), null);
@@ -211,16 +230,20 @@ test('memory: only known shapes back; a spec that no longer matches its unit is 
   const now = Date.parse('2026-11-05T12:00:00Z');
   const raw = JSON.parse(`{"devices":{
     "5ccf7f112233":{"model":"weatherman","firmware":"wm","address":"192.168.1.50","lastAt":${now - 1000},
-      "features":{"w_temperatur":{"kind":"number","category":"temperature-sensor","type":"decimal","unit":"celsius","name":"T"},
-                  "w_bad":{"kind":"number","category":"temperature-sensor","type":"decimal","unit":"kelvin"},
-                  "w_mixed":{"kind":"number","category":"humidity-sensor","type":"decimal","unit":"celsius"},
+      "features":{"w_temperatur":{"kind":"number","category":"temperature-sensor","type":"decimal","unit":"celsius","name":"T","source":"gradC"},
+                  "r_heute":{"kind":"number","category":"precipitation-sensor","type":"decimal","unit":"millimeter-per-day","source":"mm"},
+                  "w_nosource":{"kind":"number","category":"temperature-sensor","type":"decimal","unit":"celsius"},
+                  "w_bad":{"kind":"number","category":"temperature-sensor","type":"decimal","unit":"kelvin","source":"gradC"},
+                  "w_mixed":{"kind":"number","category":"humidity-sensor","type":"decimal","unit":"celsius","source":"gradC"},
                   "__proto__":{"kind":"string","category":"text","type":"text"}}},
     "nope":{"model":"x"},
-    "5ccf7f000001":{"model":"a\\u0001b","lastAt":${now + 60000},"features":[]}}}`);
+    "5ccf7f000001":{"model":"a\\u0001b","lastAt":${now + 60000},"features":{"t":{"kind":"string","category":"text","type":"text"}}},
+    "5ccf7f000002":{"model":"empty","features":{}}}}`);
   const memory = normalizeMemory(raw, now);
   assert.deepEqual(Object.keys(memory.devices).sort(), ['5ccf7f000001', '5ccf7f112233']);
   const entry = memory.devices['5ccf7f112233'];
-  assert.deepEqual(Object.keys(entry.features), ['w_temperatur']);
+  assert.deepEqual(Object.keys(entry.features), ['w_temperatur', 'r_heute']);
+  assert.equal(entry.features.r_heute.unit, 'millimeter-per-day');
   assert.equal(Object.getPrototypeOf(entry.features), Object.prototype, 'never a prototype set');
   assert.equal(entry.features.w_temperatur.min, -60);
   assert.equal(memory.devices['5ccf7f000001'].model, 'wiffi');
