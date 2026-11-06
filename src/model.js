@@ -6,15 +6,24 @@
 // writes literally and the core carries: `km/h`, `m/s` (speed), `mm/h`
 // (precipitation per hour), `ppm` and `ppb` by name only (`ppm` is CO2 when
 // the name says co2, CO when it says co; `ppb` is VOC when it says voc;
-// another gas is never shown as one of these). A `mm` is a rain amount of the
-// day or of the hour only when its name says so, one of the two only (a total
-// of yesterday is not published). These names are a guess, not read in the
-// manufacturer's documentation. A `%` is a humidity or a soil moisture only
-// when the name says so. A boolean is a rain or a motion sensor only when the
-// name says so. Any other number or boolean is not published (the status
-// lists it): never a guessed unit. `W/m2` (radiation) has no category in
-// Gladys. A text (wind direction, ...) is a read-only text feature, except
-// the network details of the device.
+// another gas is never shown as one of these; `co_2`, CO2 or a second CO
+// probe, is neither). A `mm` is a rain amount of the day or of the hour only
+// when its name says so, one of the two only (a total of yesterday is not
+// published). These names are a guess, not read in the manufacturer's
+// documentation. A `%` is a humidity or a soil moisture only when the name
+// says so. A boolean is a rain or a motion sensor only when the name says so.
+// Any other number or boolean is not published (the status lists it): never a
+// guessed unit. `W/m2` (radiation) has no category in Gladys. A text (wind
+// direction, ...) is a read-only text feature, except the network details of
+// the device.
+//
+// Names: a stem that German or English writes inside a longer word
+// (`luftfeuchte`, `bodenfeuchte`, `starkregen`, `tvoc`, `eco2`) is matched
+// anywhere in the name; a short word that hides in other words (`co` in
+// `cooling`, `tag` in `stage`, `pir` in `expired`, `rain` in `drain`) is
+// matched only as a word of the name, the parts between `_` (`rain` as the
+// start of one: `raining`). An exclusion (`abs`, yesterday) is matched
+// anywhere: the safe side.
 //
 // Bounds: a value outside the range of its kind is no measurement (a sensor
 // unplugged reports nonsense), it is not published.
@@ -44,11 +53,17 @@ const PPM = [
   [/(^|_)co($|_)|kohlenmonoxid|carbon_?monoxide/i, sensor('co-sensor', 'decimal', 'ppm', 0, 1000)],
 ];
 
+/** `co_2`: CO2, or the second CO probe of a device? Not published. */
+const PPM_AMBIGUOUS = /(^|_)co_2($|_)/i;
+
 const PPB = [[/voc/i, sensor('voc-sensor', 'decimal', 'ppb', 0, 100_000)]];
 
+/** True when one word of the name (a part between `_`) is one of `words`. */
+const word = (...words) => new RegExp(`(^|_)(${words.join('|')})($|_)`, 'i');
+
 const YESTERDAY = /gestern|yesterday|vortag/i;
-const DAY = /heute|tag|day|24/i;
-const HOUR = /stunde|hour|1h|(^|_)(pro_)?h($|_)/i;
+const DAY = word('heute', 'tag', 'today', 'day', '24', '24h', 'h24');
+const HOUR = word('stunde', 'hour', '1h', 'h');
 const MM_DAY = sensor('precipitation-sensor', 'decimal', 'millimeter-per-day', 0, 1000);
 const MM_HOUR = sensor('precipitation-sensor', 'decimal', 'millimeter-per-hour', 0, 500);
 
@@ -67,8 +82,8 @@ const PERCENT = [
 ];
 
 const BOOLEAN = [
-  [/regen|rain/i, sensor('rain-sensor', 'binary', null, 0, 1)],
-  [/beweg|motion|pir/i, sensor('motion-sensor', 'binary', null, 0, 1)],
+  [/regen|(^|_)rain/i, sensor('rain-sensor', 'binary', null, 0, 1)],
+  [/beweg|motion|(^|_)pir($|_)/i, sensor('motion-sensor', 'binary', null, 0, 1)],
 ];
 
 /** Network details of the device: never published (they say nothing of the weather). */
@@ -94,6 +109,7 @@ export function describe(metric) {
   }
   if (metric.unit === 'mm') spec = rainAmount(metric.key);
   if (metric.unit === 'ppm') spec = PPM.find(([name]) => name.test(metric.key))?.[1];
+  if (metric.unit === 'ppm' && PPM_AMBIGUOUS.test(metric.key)) spec = undefined;
   if (metric.unit === 'ppb') spec = PPB.find(([name]) => name.test(metric.key))?.[1];
   return spec ? { spec: { kind: 'number', ...spec, source: metric.unit } } : { skip: 'unit' };
 }

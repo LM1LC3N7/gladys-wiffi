@@ -48,39 +48,46 @@ télégramme, reconnaît le Wiffi par son adresse MAC et publie ses valeurs.
 
 ## Ce qui est publié
 
-| Unité du Wiffi                                                   | Dans Gladys                                                    |
-| ---------------------------------------------------------------- | -------------------------------------------------------------- |
-| `gradC`                                                          | température (°C), de -60 à 100                                 |
-| `%` dont le nom contient « feucht » ou « humid » (sauf « abs »)  | humidité (%)                                                   |
-| `%` dont le nom contient « boden » ou « soil »                   | humidité du sol (%)                                            |
-| `mb`                                                             | pression (mbar), de 300 à 1200                                 |
-| `lux`                                                            | luminosité (lux)                                               |
-| `grad`                                                           | angle (°), de -90 à 360 (direction du vent, hauteur du soleil) |
-| `km/h`, `m/s`                                                    | vitesse                                                        |
-| `mm/h`                                                           | précipitations (mm/h)                                          |
-| `mm` dont le nom contient « heute », « tag », « day » ou « 24 »  | précipitations du jour (mm/jour)                               |
-| `mm` dont le nom contient « stunde », « hour », « 1h » ou « _h » | précipitations de l’heure (mm/h)                               |
-| `ppm` dont le nom contient « co2 » ou « kohlendioxid »           | CO2 (ppm)                                                      |
-| `ppm` dont le nom contient « co » (seul) ou « kohlenmonoxid »    | CO (ppm)                                                       |
-| `ppb` dont le nom contient « voc »                               | COV (ppb)                                                      |
-| booléen dont le nom contient « regen » ou « rain »               | capteur de pluie                                               |
-| booléen dont le nom contient « beweg », « motion » ou « pir »    | détecteur de mouvement                                         |
-| texte (direction du vent en lettres…)                            | texte                                                          |
+| Unité du Wiffi                                                                                                                | Dans Gladys                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `gradC`                                                                                                                       | température (°C), de -60 à 100                                 |
+| `%` dont le nom contient « feucht » ou « humid » (sauf « abs »)                                                               | humidité (%)                                                   |
+| `%` dont le nom contient « boden » ou « soil »                                                                                | humidité du sol (%)                                            |
+| `mb`                                                                                                                          | pression (mbar), de 300 à 1200                                 |
+| `lux`                                                                                                                         | luminosité (lux)                                               |
+| `grad`                                                                                                                        | angle (°), de -90 à 360 (direction du vent, hauteur du soleil) |
+| `km/h`, `m/s`                                                                                                                 | vitesse                                                        |
+| `mm/h`                                                                                                                        | précipitations (mm/h)                                          |
+| `mm` dont un mot du nom est « heute », « tag », « today », « day », « 24 », « 24h » ou « h24 »                                | précipitations du jour (mm/jour)                               |
+| `mm` dont un mot du nom est « stunde », « hour », « 1h » ou « h »                                                             | précipitations de l’heure (mm/h)                               |
+| `ppm` dont le nom contient « co2 », « kohlendioxid » ou « carbon_dioxide » (ou « carbondioxide »)                             | CO2 (ppm), de 0 à 10 000                                       |
+| `ppm` dont un mot du nom est « co », ou dont le nom contient « kohlenmonoxid » ou « carbon_monoxide » (ou « carbonmonoxide ») | CO (ppm), de 0 à 1000                                          |
+| `ppb` dont le nom contient « voc »                                                                                            | COV (ppb), de 0 à 100 000                                      |
+| booléen dont le nom contient « regen » ou dont un mot commence par « rain »                                                   | capteur de pluie                                               |
+| booléen dont le nom contient « beweg » ou « motion », ou dont un mot est « pir »                                              | détecteur de mouvement                                         |
+| texte (direction du vent en lettres…)                                                                                         | texte                                                          |
+
+Un « mot du nom » est une partie entre deux `_`, sans distinction de majuscules
+(`regen_tag` : « regen » et « tag ») ; « contient » vaut n’importe où dans le nom
+(`w_luftfeuchte` contient « feucht »). Ainsi `stage` ou `montag_regen` ne disent pas
+le jour, `cooling` ou `a_coil` ne sont pas du CO, `w_drain` n’est pas la pluie et
+`w_expired` pas un mouvement. Une exclusion (« abs », la veille) vaut n’importe où
+dans le nom.
 
 Les règles sur les noms (pluie du jour ou de l’heure, gaz) sont une supposition : les
 noms des variables de chaque modèle n’ont pas été lus dans la documentation du
-fabricant. Un nom ambigu (jour et heure à la fois) et un autre gaz en `ppm`
-(formaldéhyde…) ne sont pas publiés, seulement listés. À confirmer avec de vrais
-appareils : vos retours sont bienvenus.
+fabricant. Un nom ambigu (jour et heure à la fois ; `co_2`, CO2 ou deuxième sonde de
+CO) et un autre gaz en `ppm` (formaldéhyde…) ne sont pas publiés, seulement listés. À
+confirmer avec de vrais appareils : vos retours sont bienvenus.
 
 Rien n’est inventé :
 
 - une valeur vide, `nan`, un texte, un nombre à virgule (« 1,5 ») ou hors de la plage
   de sa nature n’est **pas** publiée (jamais 0 à la place) ;
 - une autre unité (`g/m3`…), un `mm` dont le nom ne dit ni le jour ni l’heure (ou
-  dit la veille : « gestern ») ou un autre booléen n’est pas publié : l’état liste ces
-  variables (les 20 premières), pour qu’on puisse les ajouter. Le `W/m2`
-  (rayonnement) n’a pas de catégorie dans Gladys : jamais publié ;
+  dit la veille : « gestern », « vortag », « yesterday ») ou un autre booléen n’est
+  pas publié : l’état liste ces variables (les 20 premières), pour qu’on puisse les
+  ajouter. Le `W/m2` (rayonnement) n’a pas de catégorie dans Gladys : jamais publié ;
 - un Wiffi n’est gardé (et proposé dans la Découverte) qu’une fois qu’il a envoyé au
   moins une valeur publiable ;
 - les détails réseau du Wiffi (adresse IP, SSID, signal Wi-Fi) ne sont pas publiés ;

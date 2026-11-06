@@ -20,7 +20,8 @@ the notes of the version's GitHub Release.
   features by the variable names. Invalid, `nan` or out-of-range values are
   never published; other units are listed in the status.
 - Rain amounts (`mm/h`, and `mm` of the day or of the hour by their name), CO2
-  and CO (`ppm`) and VOC (`ppb`), by their name.
+  and CO (`ppm`) and VOC (`ppb`), by their name; a short word (`co`, `tag`, `pir`)
+  counts only as a word of the name (`cooling` is no CO, `stage` no day).
 - Allowed senders (private addresses by default), telegrams cut at 64 KB,
   bounded connections, duration and rate; every refusal counted in the status.
 - A Wiffi silent for the configured delay (5 min by default) is shown

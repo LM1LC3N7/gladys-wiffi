@@ -163,6 +163,125 @@ test('mapping: only the known units; names decide % and booleans; network detail
   assert.equal(stateOf(d('s', 'string').spec, 3), null);
 });
 
+test('mapping: name rules word by word; a stem anywhere; CO is the word co only', () => {
+  const as = (key, unit, kind = 'number') => {
+    const d = describe({ key, kind, unit });
+    if (!d.spec) return `skip:${d.skip}`;
+    return d.spec.unit ? `${d.spec.category}/${d.spec.unit}` : d.spec.category;
+  };
+  const NO = 'skip:unit';
+  const CO = 'co-sensor/ppm';
+  const CO2 = 'co2-sensor/ppm';
+  const VOC = 'voc-sensor/ppb';
+  const DAY = 'precipitation-sensor/millimeter-per-day';
+  const HOUR = 'precipitation-sensor/millimeter-per-hour';
+  const HUMIDITY = 'humidity-sensor/percent';
+  const SOIL = 'soil-moisture-sensor/percent';
+  const cases = [
+    // ppm: CO only for the word co (a second probe `co_1` too), never "co" inside a word.
+    ['co', 'ppm', CO],
+    ['a_co', 'ppm', CO],
+    ['co_wert', 'ppm', CO],
+    ['a_co_1', 'ppm', CO],
+    ['A_CO', 'ppm', CO],
+    ['compressor', 'ppm', NO],
+    ['a_coil', 'ppm', NO],
+    ['cooling', 'ppm', NO],
+    ['a_cof', 'ppm', NO],
+    ['a_kohlenmonoxid', 'ppm', CO],
+    ['a_kohlenmonoxidgehalt', 'ppm', CO],
+    ['carbon_monoxide', 'ppm', CO],
+    ['a_carbonmonoxide', 'ppm', CO],
+    // ppm: CO2 by its stem, anywhere (`eco2`, the CO2 equivalent of air sensors); never CO.
+    ['a_co2', 'ppm', CO2],
+    ['A_CO2', 'ppm', CO2],
+    ['co2_wert', 'ppm', CO2],
+    ['a_eco2', 'ppm', CO2],
+    ['a_kohlendioxid', 'ppm', CO2],
+    ['a_kohlendioxidgehalt', 'ppm', CO2],
+    ['carbon_dioxide', 'ppm', CO2],
+    ['carbondioxide', 'ppm', CO2],
+    // `co_2`: CO2 written with a `_`, or the second CO probe? Neither is published.
+    ['a_co_2', 'ppm', NO],
+    ['co_2_wert', 'ppm', NO],
+    ['a_formaldehyd', 'ppm', NO],
+    // ppb: VOC by its stem (`tvoc`); another gas never.
+    ['a_voc', 'ppb', VOC],
+    ['a_tvoc', 'ppb', VOC],
+    ['a_no2', 'ppb', NO],
+    // mm: the day or the hour by a word of the name; `tag` inside a word is not the day.
+    ['regen_heute', 'mm', DAY],
+    ['regen_tag', 'mm', DAY],
+    ['rain_today', 'mm', DAY],
+    ['rain_day', 'mm', DAY],
+    ['regen_24', 'mm', DAY],
+    ['regen_24h', 'mm', DAY],
+    ['regen_h24', 'mm', DAY],
+    ['stage', 'mm', NO],
+    ['montag_regen', 'mm', NO],
+    ['tagesregen', 'mm', NO],
+    ['regen_stunde', 'mm', HOUR],
+    ['rain_per_hour', 'mm', HOUR],
+    ['regen_1h', 'mm', HOUR],
+    ['regen_pro_h', 'mm', HOUR],
+    ['regen1h', 'mm', NO],
+    ['r_11h', 'mm', NO],
+    ['r_hagel', 'mm', NO],
+    ['regen_tag_h', 'mm', NO],
+    // yesterday, anywhere in the name (the safe side): never today.
+    ['r_tag_gestern', 'mm', NO],
+    ['r_tag_vorgestern', 'mm', NO],
+    ['r_vortag_24h', 'mm', NO],
+    ['rain_yesterday_24h', 'mm', NO],
+    // %: humidity and soil moisture by their stems (German writes them in one word).
+    ['w_feuchte_rel', '%', HUMIDITY],
+    ['w_luftfeuchte', '%', HUMIDITY],
+    ['w_humidity', '%', HUMIDITY],
+    ['w_boden_feuchte', '%', SOIL],
+    ['w_bodenfeuchte', '%', SOIL],
+    ['w_soil_moisture', '%', SOIL],
+    ['w_feuchte_abs', '%', NO],
+    ['w_feuchte_absolut', '%', NO],
+    // booleans: `regen` anywhere (`starkregen`), `rain` starting a word, `pir` as a word.
+    ['w_regen', '', 'rain-sensor', 'boolean'],
+    ['w_starkregen', '', 'rain-sensor', 'boolean'],
+    ['w_rain', '', 'rain-sensor', 'boolean'],
+    ['w_raining', '', 'rain-sensor', 'boolean'],
+    ['w_drain', '', NO, 'boolean'],
+    ['w_train', '', NO, 'boolean'],
+    ['w_bewegung', '', 'motion-sensor', 'boolean'],
+    ['w_motion', '', 'motion-sensor', 'boolean'],
+    ['w_pir', '', 'motion-sensor', 'boolean'],
+    ['w_expired', '', NO, 'boolean'],
+    ['w_spirit', '', NO, 'boolean'],
+    // network details: anywhere in the name (the safe side).
+    ['w_mac', '', 'skip:private', 'string'],
+    ['w_ssid', '', 'skip:private', 'string'],
+    ['w_wlan_name', '', 'skip:private', 'string'],
+    ['w_ipadresse', '', 'skip:private', 'string'],
+    ['w_wind_text', '', 'text', 'string'],
+  ];
+  for (const [key, unit, expected, kind] of cases) {
+    assert.equal(as(key, unit, kind), expected, `${key} (${unit || kind})`);
+  }
+  assert.notEqual(as('a_co_2', 'ppm'), CO, 'co_2 is never CO');
+});
+
+test('mapping: a gas outside its range is no measurement, the bounds themselves are', () => {
+  const spec = (key, unit) => describe({ key, kind: 'number', unit }).spec;
+  for (const [key, unit, max] of [
+    ['a_co', 'ppm', 1000],
+    ['a_co2', 'ppm', 10_000],
+    ['a_voc', 'ppb', 100_000],
+  ]) {
+    const s = spec(key, unit);
+    assert.deepEqual(stateOf(s, 0), { state: 0 }, `${key} 0`);
+    assert.deepEqual(stateOf(s, max), { state: max }, `${key} ${max}`);
+    assert.equal(stateOf(s, max + 0.1), null, `${key} ${max + 0.1}`);
+    assert.equal(stateOf(s, -0.1), null, `${key} -0.1`);
+  }
+});
+
 test('devices: every feature passes the rules of the core; a created feature never lost', () => {
   const t = parseTelegram(WEATHERMAN);
   const features = {};

@@ -39,6 +39,13 @@ receiver and the real channel on the loopback.
   `ppm` -> CO2 or CO, `ppb` -> VOC, by their name only, review r2); `mm` by its name
   (day or hour, not both; yesterday never). Another gas in `ppm` is never shown as CO2. A
   daily rain total that falls to 0 at midnight is a real value, not an index.
+  **Names** (review r3): a stem written inside longer words (`feucht`, `boden`,
+  `regen`, `voc`, `co2`, `kohlendioxid`…) matches anywhere; a short word that hides
+  in others (`co` in `cooling`, `pir` in `expired`) and every day or hour word
+  (`tag` in `stage` or `montag`) only as a word between `_` (`rain` as the start of
+  one: not `drain`); exclusions (`abs`, yesterday) anywhere. `co_2` (CO2, or a
+  second CO probe) is not published. Every alternative has a test and a mutant
+  (`test/mutants.mjs`).
   `W/m2` has no category in Gladys (review r1). `grad` goes to
   `angle-sensor` with the unit `degree`, as the core's Netatmo integration does
   (the core has no unit list for that category). A `%` is a humidity or a soil

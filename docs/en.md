@@ -46,38 +46,45 @@ recognizes the Wiffi by its MAC address and publishes its values.
 
 ## What is published
 
-| Wiffi unit                                             | In Gladys                                             |
-| ------------------------------------------------------ | ----------------------------------------------------- |
-| `gradC`                                                | temperature (°C), -60 to 100                          |
-| `%` whose name holds "feucht" or "humid" (not "abs")   | humidity (%)                                          |
-| `%` whose name holds "boden" or "soil"                 | soil moisture (%)                                     |
-| `mb`                                                   | pressure (mbar), 300 to 1200                          |
-| `lux`                                                  | brightness (lux)                                      |
-| `grad`                                                 | angle (°), -90 to 360 (wind direction, sun elevation) |
-| `km/h`, `m/s`                                          | speed                                                 |
-| `mm/h`                                                 | precipitation (mm/h)                                  |
-| `mm` whose name holds "heute", "tag", "day" or "24"    | precipitation of the day (mm/day)                     |
-| `mm` whose name holds "stunde", "hour", "1h" or "_h"   | precipitation of the hour (mm/h)                      |
-| `ppm` whose name holds "co2" or "kohlendioxid"         | CO2 (ppm)                                             |
-| `ppm` whose name holds "co" (alone) or "kohlenmonoxid" | CO (ppm)                                              |
-| `ppb` whose name holds "voc"                           | VOC (ppb)                                             |
-| boolean whose name holds "regen" or "rain"             | rain sensor                                           |
-| boolean whose name holds "beweg", "motion" or "pir"    | motion sensor                                         |
-| text (wind direction in letters…)                      | text                                                  |
+| Wiffi unit                                                                                                           | In Gladys                                             |
+| -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `gradC`                                                                                                              | temperature (°C), -60 to 100                          |
+| `%` whose name holds "feucht" or "humid" (not "abs")                                                                 | humidity (%)                                          |
+| `%` whose name holds "boden" or "soil"                                                                               | soil moisture (%)                                     |
+| `mb`                                                                                                                 | pressure (mbar), 300 to 1200                          |
+| `lux`                                                                                                                | brightness (lux)                                      |
+| `grad`                                                                                                               | angle (°), -90 to 360 (wind direction, sun elevation) |
+| `km/h`, `m/s`                                                                                                        | speed                                                 |
+| `mm/h`                                                                                                               | precipitation (mm/h)                                  |
+| `mm` with a word of its name "heute", "tag", "today", "day", "24", "24h" or "h24"                                    | precipitation of the day (mm/day)                     |
+| `mm` with a word of its name "stunde", "hour", "1h" or "h"                                                           | precipitation of the hour (mm/h)                      |
+| `ppm` whose name holds "co2", "kohlendioxid" or "carbon_dioxide" (or "carbondioxide")                                | CO2 (ppm), 0 to 10,000                                |
+| `ppm` with the word "co" in its name, or whose name holds "kohlenmonoxid" or "carbon_monoxide" (or "carbonmonoxide") | CO (ppm), 0 to 1000                                   |
+| `ppb` whose name holds "voc"                                                                                         | VOC (ppb), 0 to 100,000                               |
+| boolean whose name holds "regen", or with a word starting with "rain"                                                | rain sensor                                           |
+| boolean whose name holds "beweg" or "motion", or with the word "pir"                                                 | motion sensor                                         |
+| text (wind direction in letters…)                                                                                    | text                                                  |
+
+A "word of the name" is a part between two `_`, whatever the case (`regen_tag`:
+"regen" and "tag"); "holds" means anywhere in the name (`w_luftfeuchte` holds
+"feucht"). So `stage` or `montag_regen` do not say the day, `cooling` or `a_coil`
+are no CO, `w_drain` is no rain and `w_expired` no motion. An exclusion ("abs",
+yesterday) applies anywhere in the name.
 
 The rules on the names (rain of the day or of the hour, the gases) are a guess: the
 variable names of each model were not read in the manufacturer's documentation.
-An ambiguous name (day and hour both) and another gas in `ppm` (formaldehyde…) are
-not published, only listed. To confirm with real devices: feedback is welcome.
+An ambiguous name (day and hour both; `co_2`, CO2 or a second CO probe) and another
+gas in `ppm` (formaldehyde…) are not published, only listed. To confirm with real
+devices: feedback is welcome.
 
 Nothing is made up:
 
 - an empty value, `nan`, a text, a comma decimal ("1,5") or a value outside the
   range of its kind is **not** published (never a 0 instead);
 - another unit (`g/m3`…), a `mm` whose name says neither the day nor the hour (or
-  says yesterday: "gestern"), or another boolean is not published: the status lists
-  these variables (the first 20), so they can be added. `W/m2` (radiation) has no
-  category in Gladys: never published;
+  says yesterday: "gestern", "vortag", "yesterday"), or another boolean is not
+  published: the status lists these variables (the first 20), so they can be
+  added. `W/m2` (radiation) has no category in Gladys: never published;
 - a Wiffi is kept (and offered in the Discovery) only once it sent at least one
   value it can publish;
 - the network details of the Wiffi (IP address, SSID, Wi-Fi signal) are not
