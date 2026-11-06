@@ -36,7 +36,8 @@ receiver and the real channel on the loopback.
   publisher, status), read only.
 - **Units**: the ones the references map (`gradC`, `grad`, `%`, `mb`, `lux`) and
   the ones the device writes literally and the core carries (`km/h`, `m/s`, `mm/h`,
-  `ppm` -> CO2, `ppb` -> VOC); `mm` by its name (day or hour; yesterday never). A
+  `ppm` -> CO2 or CO, `ppb` -> VOC, by their name only, review r2); `mm` by its name
+  (day or hour, not both; yesterday never). Another gas in `ppm` is never shown as CO2. A
   daily rain total that falls to 0 at midnight is a real value, not an index.
   `W/m2` has no category in Gladys (review r1). `grad` goes to
   `angle-sensor` with the unit `degree`, as the core's Netatmo integration does

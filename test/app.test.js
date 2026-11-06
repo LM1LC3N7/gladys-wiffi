@@ -637,3 +637,36 @@ test('refusals are shown for an hour after the last one, then no more', async (t
   await env.time.advance(60 * MINUTE);
   assert.doesNotMatch(env.status().message.en, /sender not allowed/);
 });
+
+test('a telegram whose only known value is nan takes no place in the table', async (t) => {
+  const env = await makeApp();
+  t.after(() => env.stop());
+  const body = JSON.stringify({
+    modultyp: 'x',
+    vars: [{ homematic_name: 'w_temperatur', type: 'number', unit: 'gradC', value: 'nan' }],
+    Systeminfo: { 'MAC-Adresse': '5C:CF:7F:00:00:42' },
+  });
+  await env.send(body);
+  await env.time.advance(TIMINGS.discoveryDelay);
+  assert.deepEqual(Object.keys(env.app.memory.devices), []);
+  assert.match(env.status().message.en, /1 telegram refused: nothing publishable/);
+});
+
+test('an old channel that still talks after a new secret is never listened to', async (t) => {
+  const env = await makeApp();
+  t.after(() => env.stop());
+  const old = env.channel;
+  await env.gladys.fake.configUpdated({ channel_token: 'n'.repeat(32) });
+  await env.time.settle();
+  assert.equal(env.channels.length, 2);
+  old.telegram(WEATHERMAN, {
+    at: new Date(env.time.now()).toISOString(),
+    boot: '0123456789abcdef',
+    seq: 1,
+  });
+  await env.time.advance(TIMINGS.discoveryDelay);
+  assert.deepEqual(Object.keys(env.app.memory.devices), []);
+  await env.send(WEATHERMAN);
+  await env.time.advance(TIMINGS.discoveryDelay);
+  assert.deepEqual(Object.keys(env.app.memory.devices), [MAC]);
+});

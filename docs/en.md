@@ -46,23 +46,29 @@ recognizes the Wiffi by its MAC address and publishes its values.
 
 ## What is published
 
-| Wiffi unit                                           | In Gladys                                             |
-| ---------------------------------------------------- | ----------------------------------------------------- |
-| `gradC`                                              | temperature (°C), -60 to 100                          |
-| `%` whose name holds "feucht" or "humid" (not "abs") | humidity (%)                                          |
-| `%` whose name holds "boden" or "soil"               | soil moisture (%)                                     |
-| `mb`                                                 | pressure (mbar), 300 to 1200                          |
-| `lux`                                                | brightness (lux)                                      |
-| `grad`                                               | angle (°), -90 to 360 (wind direction, sun elevation) |
-| `km/h`, `m/s`                                        | speed                                                 |
-| `mm/h`                                               | precipitation (mm/h)                                  |
-| `mm` whose name holds "heute", "tag", "day" or "24"  | precipitation of the day (mm/day)                     |
-| `mm` whose name holds "stunde", "hour", "1h" or "_h" | precipitation of the hour (mm/h)                      |
-| `ppm`                                                | CO2 (ppm)                                             |
-| `ppb`                                                | VOC (ppb)                                             |
-| boolean whose name holds "regen" or "rain"           | rain sensor                                           |
-| boolean whose name holds "beweg", "motion" or "pir"  | motion sensor                                         |
-| text (wind direction in letters…)                    | text                                                  |
+| Wiffi unit                                             | In Gladys                                             |
+| ------------------------------------------------------ | ----------------------------------------------------- |
+| `gradC`                                                | temperature (°C), -60 to 100                          |
+| `%` whose name holds "feucht" or "humid" (not "abs")   | humidity (%)                                          |
+| `%` whose name holds "boden" or "soil"                 | soil moisture (%)                                     |
+| `mb`                                                   | pressure (mbar), 300 to 1200                          |
+| `lux`                                                  | brightness (lux)                                      |
+| `grad`                                                 | angle (°), -90 to 360 (wind direction, sun elevation) |
+| `km/h`, `m/s`                                          | speed                                                 |
+| `mm/h`                                                 | precipitation (mm/h)                                  |
+| `mm` whose name holds "heute", "tag", "day" or "24"    | precipitation of the day (mm/day)                     |
+| `mm` whose name holds "stunde", "hour", "1h" or "_h"   | precipitation of the hour (mm/h)                      |
+| `ppm` whose name holds "co2" or "kohlendioxid"         | CO2 (ppm)                                             |
+| `ppm` whose name holds "co" (alone) or "kohlenmonoxid" | CO (ppm)                                              |
+| `ppb` whose name holds "voc"                           | VOC (ppb)                                             |
+| boolean whose name holds "regen" or "rain"             | rain sensor                                           |
+| boolean whose name holds "beweg", "motion" or "pir"    | motion sensor                                         |
+| text (wind direction in letters…)                      | text                                                  |
+
+The rules on the names (rain of the day or of the hour, the gases) are a guess: the
+variable names of each model were not read in the manufacturer's documentation.
+An ambiguous name (day and hour both) and another gas in `ppm` (formaldehyde…) are
+not published, only listed. To confirm with real devices: feedback is welcome.
 
 Nothing is made up:
 
@@ -91,7 +97,8 @@ connections at most (4 per address, the oldest of the address makes room); a
 connection is closed after 5 s without a byte and 15 s in all, after 4 telegrams
 (an empty one counts) and beyond 129 KB; 60 telegrams a minute per address (240 in
 all, empty ones count), the rest is ignored. Each refusal is counted in the status
-for an hour. When Docker shows every Wiffi under one address (its gateway), they
+for an hour. The number of connections a second from one address is not capped:
+each one stays bounded as above. When Docker shows every Wiffi under one address (its gateway), they
 share the 60 a minute of that address: enough for Wiffis sending every few seconds,
 not for dozens of them.
 

@@ -29,8 +29,8 @@ const REASONS = {
     'au-delà du débit total (240 par minute pour toutes les adresses)',
   ),
   nothing: both(
-    'nothing publishable (a new Wiffi is kept only with a supported value)',
-    'rien de publiable (un nouveau Wiffi n’est gardé qu’avec une valeur prise en charge)',
+    'nothing publishable (a new Wiffi is kept only with a valid value of a supported unit)',
+    'rien de publiable (un nouveau Wiffi n’est gardé qu’avec une valeur valable d’une unité prise en charge)',
   ),
   connections: both('over the connection limit', 'au-delà de la limite de connexions'),
   json: both(

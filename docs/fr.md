@@ -60,11 +60,18 @@ télégramme, reconnaît le Wiffi par son adresse MAC et publie ses valeurs.
 | `mm/h`                                                           | précipitations (mm/h)                                          |
 | `mm` dont le nom contient « heute », « tag », « day » ou « 24 »  | précipitations du jour (mm/jour)                               |
 | `mm` dont le nom contient « stunde », « hour », « 1h » ou « _h » | précipitations de l’heure (mm/h)                               |
-| `ppm`                                                            | CO2 (ppm)                                                      |
-| `ppb`                                                            | COV (ppb)                                                      |
+| `ppm` dont le nom contient « co2 » ou « kohlendioxid »           | CO2 (ppm)                                                      |
+| `ppm` dont le nom contient « co » (seul) ou « kohlenmonoxid »    | CO (ppm)                                                       |
+| `ppb` dont le nom contient « voc »                               | COV (ppb)                                                      |
 | booléen dont le nom contient « regen » ou « rain »               | capteur de pluie                                               |
 | booléen dont le nom contient « beweg », « motion » ou « pir »    | détecteur de mouvement                                         |
 | texte (direction du vent en lettres…)                            | texte                                                          |
+
+Les règles sur les noms (pluie du jour ou de l’heure, gaz) sont une supposition : les
+noms des variables de chaque modèle n’ont pas été lus dans la documentation du
+fabricant. Un nom ambigu (jour et heure à la fois) et un autre gaz en `ppm`
+(formaldéhyde…) ne sont pas publiés, seulement listés. À confirmer avec de vrais
+appareils : vos retours sont bienvenus.
 
 Rien n’est inventé :
 
@@ -92,7 +99,9 @@ est coupé au-delà de 64 Ko ; 16 connexions au plus (4 par adresse, la plus anc
 de l’adresse cède la place) ; une connexion est fermée après 5 s sans octet et 15 s
 au total, après 4 télégrammes (un vide compte) et au-delà de 129 Ko ; 60 télégrammes
 par minute et par adresse (240 en tout, les vides comptent), le reste est ignoré.
-Chaque refus est compté dans l’état pendant une heure. Quand Docker montre tous les
+Chaque refus est compté dans l’état pendant une heure. Le nombre de connexions par
+seconde d’une même adresse n’est pas plafonné : chacune reste bornée comme ci-dessus.
+Quand Docker montre tous les
 Wiffis sous une seule adresse (sa passerelle), ils se partagent les 60 par minute de
 cette adresse : assez pour des Wiffis qui envoient toutes les quelques secondes, pas
 pour des dizaines.

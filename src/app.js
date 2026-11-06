@@ -458,7 +458,12 @@ export class WiffiApp {
     if (!entry) {
       // A Wiffi is remembered only with something to publish: a telegram of
       // unknown variables never takes a place in the table (nor in /data).
-      if (!parsed.metrics.some((metric) => describe(metric).spec)) {
+      // A valid value, not only a known variable: a telegram of `nan` takes no place.
+      const publishable = (metric) => {
+        const spec = describe(metric).spec;
+        return Boolean(spec) && stateOf(spec, metric.value) !== null;
+      };
+      if (!parsed.metrics.some(publishable)) {
         for (const metric of parsed.metrics) {
           if (describe(metric).skip === 'unit') this.noteUnsupported(metric);
         }

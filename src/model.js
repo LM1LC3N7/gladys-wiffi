@@ -4,9 +4,12 @@
 // Units: the ones the Home Assistant wiffi integration maps (`gradC`, `grad`,
 // `%`, `mb`, `lux`, from its wiffi_strings.py) plus the ones the device
 // writes literally and the core carries: `km/h`, `m/s` (speed), `mm/h`
-// (precipitation per hour), `ppm` (CO2), `ppb` (VOC). A `mm` is a rain
-// amount of the day or of the hour only when its name says so (a total of
-// yesterday is not published). A `%` is a humidity or a soil moisture only
+// (precipitation per hour), `ppm` and `ppb` by name only (`ppm` is CO2 when
+// the name says co2, CO when it says co; `ppb` is VOC when it says voc;
+// another gas is never shown as one of these). A `mm` is a rain amount of the
+// day or of the hour only when its name says so, one of the two only (a total
+// of yesterday is not published). These names are a guess, not read in the
+// manufacturer's documentation. A `%` is a humidity or a soil moisture only
 // when the name says so. A boolean is a rain or a motion sensor only when the
 // name says so. Any other number or boolean is not published (the status
 // lists it): never a guessed unit. `W/m2` (radiation) has no category in
@@ -34,18 +37,29 @@ const BY_UNIT = {
   'km/h': sensor('speed-sensor', 'decimal', 'kilometer-per-hour', 0, 400),
   'm/s': sensor('speed-sensor', 'decimal', 'meter-per-second', 0, 120),
   'mm/h': sensor('precipitation-sensor', 'decimal', 'millimeter-per-hour', 0, 500),
-  ppm: sensor('co2-sensor', 'decimal', 'ppm', 0, 10_000),
-  ppb: sensor('voc-sensor', 'decimal', 'ppb', 0, 100_000),
 };
 
-const MM = [
-  [/gestern|yesterday|vortag/i, undefined],
-  [/heute|tag|day|24/i, sensor('precipitation-sensor', 'decimal', 'millimeter-per-day', 0, 1000)],
-  [
-    /stunde|hour|1h|(^|_)(pro_)?h($|_)/i,
-    sensor('precipitation-sensor', 'decimal', 'millimeter-per-hour', 0, 500),
-  ],
+const PPM = [
+  [/co2|kohlendioxid|carbon_?dioxide/i, sensor('co2-sensor', 'decimal', 'ppm', 0, 10_000)],
+  [/(^|_)co($|_)|kohlenmonoxid|carbon_?monoxide/i, sensor('co-sensor', 'decimal', 'ppm', 0, 1000)],
 ];
+
+const PPB = [[/voc/i, sensor('voc-sensor', 'decimal', 'ppb', 0, 100_000)]];
+
+const YESTERDAY = /gestern|yesterday|vortag/i;
+const DAY = /heute|tag|day|24/i;
+const HOUR = /stunde|hour|1h|(^|_)(pro_)?h($|_)/i;
+const MM_DAY = sensor('precipitation-sensor', 'decimal', 'millimeter-per-day', 0, 1000);
+const MM_HOUR = sensor('precipitation-sensor', 'decimal', 'millimeter-per-hour', 0, 500);
+
+/** A rain amount: of the day or of the hour by its name; both, or yesterday: none. */
+function rainAmount(key) {
+  if (YESTERDAY.test(key)) return undefined;
+  const day = DAY.test(key);
+  const hour = HOUR.test(key);
+  if (day === hour) return undefined;
+  return day ? MM_DAY : MM_HOUR;
+}
 
 const PERCENT = [
   [/boden|soil/i, sensor('soil-moisture-sensor', 'decimal', 'percent', 0, 100)],
@@ -78,9 +92,9 @@ export function describe(metric) {
   if (metric.unit === '%' && !/abs/i.test(metric.key)) {
     spec = PERCENT.find(([name]) => name.test(metric.key))?.[1];
   }
-  if (metric.unit === 'mm') {
-    spec = MM.find(([name]) => name.test(metric.key))?.[1];
-  }
+  if (metric.unit === 'mm') spec = rainAmount(metric.key);
+  if (metric.unit === 'ppm') spec = PPM.find(([name]) => name.test(metric.key))?.[1];
+  if (metric.unit === 'ppb') spec = PPB.find(([name]) => name.test(metric.key))?.[1];
   return spec ? { spec: { kind: 'number', ...spec, source: metric.unit } } : { skip: 'unit' };
 }
 

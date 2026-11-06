@@ -125,6 +125,23 @@ test('mapping: only the known units; names decide % and booleans; network detail
   assert.equal(d('r_intens', 'number', 'mm/h').spec.source, 'mm/h');
   assert.equal(d('a_co2', 'number', 'ppm').spec.category, 'co2-sensor');
   assert.equal(d('a_voc', 'number', 'ppb').spec.category, 'voc-sensor');
+  assert.equal(d('a_kohlendioxid', 'number', 'ppm').spec.category, 'co2-sensor');
+  assert.equal(d('a_co', 'number', 'ppm').spec.category, 'co-sensor', 'CO is never shown as CO2');
+  assert.equal(d('a_co', 'number', 'ppm').spec.unit, 'ppm');
+  assert.equal(d('a_kohlenmonoxid', 'number', 'ppm').spec.category, 'co-sensor');
+  assert.equal(d('a_formaldehyd', 'number', 'ppm').skip, 'unit', 'another gas: not published');
+  assert.equal(d('a_luftqualitaet', 'number', 'ppm').skip, 'unit');
+  assert.equal(d('a_nox', 'number', 'ppb').skip, 'unit', 'ppb is VOC only by its name');
+  assert.equal(
+    d('regen_tag', 'number', 'mm').spec.unit,
+    'millimeter-per-day',
+    'tag alone is the day',
+  );
+  assert.equal(
+    d('regen_tag_h', 'number', 'mm').skip,
+    'unit',
+    'day and hour: ambiguous, not published',
+  );
   assert.equal(d('w_strahlung', 'number', 'W/m2').skip, 'unit', 'no category for radiation');
   assert.equal(d('w_ip_num', 'number', 'gradC').skip, 'private', 'network details, numbers too');
   assert.equal(d('w_x', 'number', '').skip, 'unit');
