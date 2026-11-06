@@ -1,16 +1,21 @@
 {
-  "name": "gladys-integration-template-js",
-  "version": "1.0.0",
+  "name": "gladys-wiffi",
+  "version": "0.1.0",
   "private": true,
-  "description": "Official starter template to build an external integration for Gladys Assistant with the JavaScript SDK.",
+  "description": "Gladys Assistant external integration for stall.biz Wiffi sensors (weatherman, rainyman, airsniffer...), read only, from the JSON telegrams they send. Unofficial, not affiliated with stall.biz.",
   "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "receiver": "node src/receiver.js",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "node --test"
+    "test": "node --test --test-timeout=60000",
+    "audit": "npm audit --omit=dev",
+    "cover": "node scripts/cover.mjs",
+    "mutants": "node scripts/mutants.mjs",
+    "validate:manifest": "npx --yes github:GladysAssistant/integration-store ."
   },
   "engines": {
     "node": ">=22"

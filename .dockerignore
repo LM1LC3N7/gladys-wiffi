@@ -8,3 +8,6 @@ data
 *.log
 .DS_Store
 README.md
+docs/
+scripts/
+test/

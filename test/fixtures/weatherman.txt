@@ -1,0 +1,15 @@
+{"modultyp":"weatherman","vars":[
+{"name":"1","homematic_name":"w_ip","desc":"IP-Adresse","type":"string","unit":"","value":"192.168.1.50"},
+{"name":"2","homematic_name":"w_temperatur","desc":"Temperatur","type":"number","unit":"gradC","value":"12.4"},
+{"name":"3","homematic_name":"w_feuchte_rel","desc":"rel. Feuchte","type":"number","unit":"%","value":"81.0"},
+{"name":"4","homematic_name":"w_feuchte_abs","desc":"abs. Feuchte","type":"number","unit":"g/m3","value":"8.9"},
+{"name":"5","homematic_name":"w_barometer","desc":"Luftdruck","type":"number","unit":"mb","value":"1013.2"},
+{"name":"6","homematic_name":"w_lux","desc":"Helligkeit","type":"number","unit":"lux","value":"5230"},
+{"name":"7","homematic_name":"w_regen","desc":"Regen","type":"boolean","unit":"","value":"false"},
+{"name":"8","homematic_name":"w_windrichtung","desc":"Windrichtung","type":"string","unit":"","value":"NO"},
+{"name":"9","homematic_name":"w_wind_dir","desc":"Windrichtung Grad","type":"number","unit":"grad","value":"45"},
+{"name":"10","homematic_name":"w_wind_mittel","desc":"Wind Mittel","type":"number","unit":"km/h","value":"12.5"},
+{"name":"11","homematic_name":"w_sonne_scheint","desc":"Sonne scheint","type":"boolean","unit":"","value":"true"},
+{"name":"12","homematic_name":"w_taupunkt","desc":"Taupunkt","type":"number","unit":"gradC","value":nan}
+],
+"Systeminfo":{"MAC-Adresse":"5C:CF:7F:11:22:33","Homematic_CCU_ip":"192.168.1.10","WLAN_ssid":"home","WLAN_Signal_dBm":"-61","sec_seit_reset":"86400","firmware":"wm_133"}}

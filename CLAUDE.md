@@ -15,9 +15,10 @@ its only runtime dependency. It started from the official JavaScript template.
 
 ```bash
 npm install
-npm test                                  # node --test, the built-in runner
-node --test test/devices.test.js          # one file
-node --test --test-name-pattern "plug"    # tests whose name matches
+npm test                                  # node --test --test-timeout=60000
+node --test test/app.test.js              # one file
+node --test --test-name-pattern "silence" # tests whose name matches
+npm run mutants                           # the mutants, one at a time (memcap on the dev VM)
 npm run lint                              # ESLint
 npm run format:check                      # Prettier, as the CI runs it
 npm run format                            # Prettier, fix in place
@@ -32,16 +33,19 @@ pushing.
 
 ```
 index.js                          SDK wiring only: handlers registered before connect()
-src/devices/index.js              registry of the device blueprints + dispatch helpers
-src/devices/<type>.js             one device type per file (buildDevice, onPoll, onSetValue...)
-src/scenes.js                     scene action handlers (manifest `scene_actions`)
-src/widgets.js                    dashboard widget handlers (manifest `widgets`)
-src/config.js                     DEFAULT_CONFIG (mirrors the manifest defaults) + normalization
-src/weather.js                    example driver (Open-Meteo)
-gladys-assistant-integration.json manifest: name, config_schema, actions, image...
-docs/en.md, docs/fr.md            user documentation, re-hosted by Gladys (mandatory)
-test/                             node --test, against the SDK's fake Gladys (integration-sdk/testing)
-.github/scripts/release.mjs       release helpers (manifest bump, changelog), tested in test/
+src/handlers.js                   the SDK handlers (shared with the tests); read only, no onSetValue
+src/app.js                        WiffiApp: receiver, channel, telegrams, silence, status, /data
+src/telegram.js                   strict reading of a JSON telegram (wiffi 1.1.2)
+src/model.js                      unit -> Gladys feature, ranges, devices for the Discovery
+src/publisher.js                  states within the Gladys budget, dated when late
+src/push/service.js               the receiver (sub-container wiffi-push): TCP, every bound
+src/receiver.js                   entry point of the sub-container
+src/channel.js                    HMAC channel between the containers (from gladys-nasweb)
+src/store.js                      /data/wiffi.json, bounded, FIFO refused
+src/config.js                     config normalization, allowed senders
+src/i18n.js                       the status texts (en, fr)
+test/                             node --test: fake Gladys, real receiver on the loopback, real clock x20
+test/mutants.mjs, scripts/mutants.mjs   mutants of the guards, replayed one at a time
 ```
 
 ## Rules
@@ -74,3 +78,12 @@ test/                             node --test, against the SDK's fake Gladys (in
   manifest texts, and `docs/en.md` / `docs/fr.md`, kept in sync.
 - **Style.** Prettier formats, ESLint catches mistakes. Comments explain why,
   in English. Tests never touch the network.
+
+## Rules of this integration
+
+- **Read only.** No command, no action: nothing is ever sent to a Wiffi.
+- **Never a made-up value.** Empty, `nan`, text, comma decimal or out of range:
+  nothing published (never 0). An unknown unit: listed in the status.
+- **Bounded reception.** Every limit of `src/push/service.js` has a test in
+  `test/receiver.test.js`; a new one needs its test and its mutant.
+- **The silence** is decided on the monotonic clock only.

@@ -1,177 +1,114 @@
 {
   "manifest_version": 1,
   "type": "device",
-  "name": "Demo Devices Template",
+  "name": "Wiffi (stall.biz)",
   "description": {
-    "en": "Starter template showing sensors, a switch, a dimmable light and a smart plug.",
-    "fr": "Template de démarrage : capteurs, interrupteur, lampe variable et prise connectée."
+    "en": "Wiffi sensors by stall.biz (weatherman, rainyman, airsniffer…), locally, read only.",
+    "fr": "Capteurs Wiffi de stall.biz (weatherman, rainyman, airsniffer…), en local, en lecture."
   },
-  "version": "1.0.0",
-  "docker_image": "ghcr.io/gladysassistant/integration-template-js:1.0.0",
+  "version": "0.1.0",
+  "docker_image": "ghcr.io/lm1lc3n7/gladys-wiffi:0.1.0",
   "gladys_version": ">=5.1.0",
-  "cover_image": "https://raw.githubusercontent.com/GladysAssistant/integration-template-js/master/cover.png",
-  "categories": ["lighting", "security", "environment"],
-  "transports": ["local", "cloud"],
+  "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-wiffi/main/cover.png",
+  "categories": ["environment"],
+  "transports": ["local"],
+  "containers": [
+    {
+      "name": "wiffi-push",
+      "docker_image": "ghcr.io/lm1lc3n7/gladys-wiffi:0.1.0",
+      "command": ["node", "src/receiver.js"],
+      "start": "manual",
+      "read_only": true,
+      "memory_mb": 64,
+      "cpu": 0.1,
+      "ports": [
+        {
+          "container_port": 8189,
+          "protocol": "tcp",
+          "name": "wiffi_json",
+          "label": {
+            "en": "Wiffi JSON telegrams (TCP)",
+            "fr": "Télégrammes JSON des Wiffis (TCP)"
+          },
+          "browsable": false
+        }
+      ]
+    }
+  ],
   "config_schema": [
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Getting started", "fr": "Pour commencer" },
+      "label": {
+        "en": "Your Wiffis, on your local network",
+        "fr": "Vos Wiffis, sur votre réseau local"
+      },
       "description": {
-        "en": "The demo weather station reads real data from the free Open-Meteo API: pick the coordinates to observe. No account, no API key.",
-        "fr": "La station météo de démonstration lit de vraies données via l'API gratuite Open-Meteo : choisissez les coordonnées à observer. Pas de compte, pas de clé d'API."
+        "en": "Weather, rain, air and temperature sensors of stall.biz Wiffi devices (weatherman, rainyman, airsniffer, wiffi-wz…), without any cloud and read only. Each Wiffi sends its values to Gladys by itself, as JSON telegrams (a small receiver started by Gladys next to this integration). A Wiffi appears in the Discovery tab after its first telegram. Never tested with a real device. Unofficial integration, not affiliated with stall.biz.",
+        "fr": "Capteurs de météo, de pluie, d’air et de température des Wiffis de stall.biz (weatherman, rainyman, airsniffer, wiffi-wz…), sans cloud et en lecture seule. Chaque Wiffi envoie lui-même ses valeurs à Gladys, en télégrammes JSON (un petit récepteur lancé par Gladys à côté de cette intégration). Un Wiffi apparaît dans l’onglet Découverte après son premier télégramme. Jamais testé avec un vrai appareil. Intégration non officielle, sans lien avec stall.biz."
       },
       "links": [
         {
-          "url": "https://open-meteo.com/en/docs",
-          "label": { "en": "Open-Meteo documentation", "fr": "Documentation Open-Meteo" }
-        }
-      ]
-    },
-    {
-      "key": "latitude",
-      "type": "number",
-      "label": { "en": "Latitude", "fr": "Latitude" },
-      "description": {
-        "en": "Latitude used for the demo weather sensor.",
-        "fr": "Latitude utilisée par le capteur météo de démonstration."
-      },
-      "placeholder": { "en": "e.g. 48.8566", "fr": "ex. 48.8566" },
-      "required": true,
-      "default": 48.8566,
-      "min": -90,
-      "max": 90
-    },
-    {
-      "key": "longitude",
-      "type": "number",
-      "label": { "en": "Longitude", "fr": "Longitude" },
-      "description": {
-        "en": "Longitude used for the demo weather sensor.",
-        "fr": "Longitude utilisée par le capteur météo de démonstration."
-      },
-      "placeholder": { "en": "e.g. 2.3522", "fr": "ex. 2.3522" },
-      "required": true,
-      "default": 2.3522,
-      "min": -180,
-      "max": 180
-    },
-    {
-      "key": "unit",
-      "type": "select",
-      "label": { "en": "Temperature unit", "fr": "Unité de température" },
-      "required": false,
-      "default": "celsius",
-      "options": [
-        { "value": "celsius", "label": { "en": "Celsius", "fr": "Celsius" } },
-        { "value": "fahrenheit", "label": { "en": "Fahrenheit", "fr": "Fahrenheit" } }
-      ]
-    },
-    {
-      "key": "poll_frequency",
-      "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
-      "description": {
-        "en": "How often sensors are polled, in seconds (one minute minimum).",
-        "fr": "Fréquence d'interrogation des capteurs, en secondes (une minute minimum)."
-      },
-      "required": false,
-      "default": 300,
-      "min": 60,
-      "max": 3600
-    }
-  ],
-  "actions": [
-    {
-      "key": "test_weather",
-      "label": { "en": "Test the weather provider", "fr": "Tester le fournisseur météo" },
-      "timeout_seconds": 30
-    },
-    {
-      "key": "identify",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ]
-    }
-  ],
-  "scene_triggers": [
-    {
-      "key": "motion_detected",
-      "label": { "en": "Motion detected", "fr": "Mouvement détecté" },
-      "description": {
-        "en": "A demo motion sensor saw a person or an animal move.",
-        "fr": "Un détecteur de démonstration a vu bouger une personne ou un animal."
-      },
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Sensor", "fr": "Détecteur" }
+          "url": "https://github.com/LM1LC3N7/gladys-wiffi/blob/main/docs/fr.md",
+          "label": {
+            "en": "Guide (French)",
+            "fr": "Guide (français)"
+          }
         },
         {
-          "key": "target",
-          "type": "multi_select",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" },
-          "options": [
-            { "value": "person", "label": { "en": "Person", "fr": "Personne" } },
-            { "value": "animal", "label": { "en": "Animal", "fr": "Animal" } }
-          ]
-        }
-      ],
-      "variables": [
-        {
-          "key": "target",
-          "type": "string",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" }
+          "url": "https://github.com/LM1LC3N7/gladys-wiffi/blob/main/docs/en.md",
+          "label": {
+            "en": "Guide (English)",
+            "fr": "Guide (anglais)"
+          }
         }
       ]
-    }
-  ],
-  "scene_actions": [
+    },
     {
-      "key": "identify_device",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "description": {
-        "en": "Make a device signal itself (the demo light blinks).",
-        "fr": "Fait se signaler un appareil (la lampe de démonstration clignote)."
+      "key": "device_section",
+      "type": "section",
+      "label": {
+        "en": "Set up each Wiffi",
+        "fr": "Réglez chaque Wiffi"
       },
-      "timeout_seconds": 15,
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ],
-      "outputs": [
-        {
-          "key": "signalled",
-          "type": "boolean",
-          "label": { "en": "Device signalled", "fr": "Appareil signalé" }
-        }
-      ]
-    }
-  ],
-  "widgets": [
+      "description": {
+        "en": "In the web page of the Wiffi: set the CCU address (\"CCU-IP\") to the IP address of the Gladys machine on your network ({{gladys_host}} is how your browser reaches Gladys, it may differ), set the port of the JSON telegrams (parameter \"send_json\") to {{port:wiffi_json}} (chosen by Gladys), and choose JSON without header. The port appears once this configuration was saved once: save, then reload this screen. Allow this port in the firewall of the Gladys machine if it has one.",
+        "fr": "Dans la page web du Wiffi : mettez l’adresse de la CCU (« CCU-IP ») à l’adresse IP de la machine Gladys sur votre réseau ({{gladys_host}} est l’adresse par laquelle votre navigateur joint Gladys, elle peut différer), le port des télégrammes JSON (paramètre « send_json ») à {{port:wiffi_json}} (choisi par Gladys), et l’envoi JSON sans en-tête. Le port apparaît une fois cette configuration enregistrée une fois : enregistrez, puis rechargez cet écran. Autorisez ce port dans le pare-feu de la machine Gladys s’il y en a un."
+      }
+    },
     {
-      "key": "demo_status",
-      "label": { "en": "Demo status", "fr": "État de la démo" },
-      "description": {
-        "en": "Live temperature and plug power, plug connection and observed location.",
-        "fr": "Température et puissance en direct, connexion de la prise, position observée."
+      "key": "allowed_addresses",
+      "type": "string",
+      "label": {
+        "en": "Allowed senders",
+        "fr": "Expéditeurs autorisés"
       },
-      "icon": "activity",
-      "action_timeout_seconds": 15
+      "description": {
+        "en": "The IP addresses of your Wiffis (or a network such as 192.168.1.0/24), separated by commas. Empty: any address of your local network (private addresses) may send telegrams. Give your Wiffis a fixed IP address in your router and list them here.",
+        "fr": "Les adresses IP de vos Wiffis (ou un réseau comme 192.168.1.0/24), séparées par des virgules. Vide : toute adresse de votre réseau local (adresses privées) peut envoyer des télégrammes. Donnez à vos Wiffis une adresse IP fixe dans votre box et listez-les ici."
+      },
+      "placeholder": {
+        "en": "192.168.1.50, 192.168.1.51",
+        "fr": "192.168.1.50, 192.168.1.51"
+      },
+      "required": false,
+      "default": ""
+    },
+    {
+      "key": "silence_minutes",
+      "type": "number",
+      "label": {
+        "en": "Silent after (minutes)",
+        "fr": "Muet après (minutes)"
+      },
+      "description": {
+        "en": "A Wiffi that sends nothing for this long is shown unreachable and named in the status; a sensor without a valid value for this long is named too. 2 to 60 minutes.",
+        "fr": "Un Wiffi qui n’envoie rien pendant cette durée est affiché injoignable et nommé dans l’état ; un capteur sans valeur valable pendant cette durée est nommé aussi. De 2 à 60 minutes."
+      },
+      "required": false,
+      "default": 5,
+      "min": 2,
+      "max": 60
     }
   ]
 }

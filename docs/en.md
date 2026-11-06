@@ -1,61 +1,95 @@
-# Demo Devices Template
+# Wiffi (stall.biz) for Gladys
 
-This is the user documentation of the integration. Gladys re-hosts this file
-and shows a permanent **Documentation** link to it in the Configuration screen
-(in the user's language, with English as the fallback) — it is when
-configuring that the user needs it most. Keep the short onboarding hints in
-the `section` blocks of the manifest `config_schema`; put the long
-step-by-step (screenshots, troubleshooting…) here.
+This integration reads the sensors of [stall.biz](https://www.stall.biz) Wiffi
+devices (weatherman, rainyman, airsniffer, wiffi-wz…): temperature, humidity,
+pressure, brightness, wind, rain, locally, without any cloud and **read only**.
+Each Wiffi sends its values to Gladys by itself, as JSON telegrams.
 
-## What you get
+Unofficial integration, not affiliated with stall.biz. **Never tested with a real
+device**: it follows the reference library `wiffi` 1.1.2 (used by Home Assistant);
+your feedback is welcome.
 
-Six demo devices show up after installation: a weather station (real data
-from Open-Meteo), a switch, a dimmable light, a smart plug with power
-metering, a motion sensor and a camera.
+## How it works
+
+Gladys starts a small receiver (`wiffi-push`) next to the integration, listening on
+a TCP port Gladys chooses. The Wiffi opens a connection to that port, sends one JSON
+telegram ended by the byte 0x04, then closes. The integration reads the telegram,
+recognizes the Wiffi by its MAC address and publishes its values.
+
+## Setup
+
+1. Install the integration, then **save** its configuration once (even empty):
+   Gladys starts the receiver and chooses its port.
+2. Reload the configuration screen: the port shows in the "Set up each Wiffi"
+   section.
+3. In the web page of each Wiffi:
+   - set the CCU address ("CCU-IP") to the **IP address of the Gladys machine** on
+     your local network (not the one of Gladys Plus or of a proxy);
+   - set the port of the JSON telegrams (parameter `send_json`) to the port shown;
+   - choose **JSON without header** (a telegram after HTTP headers is read too).
+4. Allow this port in the firewall of the Gladys machine if it has one.
+5. After the first telegram, the Wiffi appears in the **Discovery** tab: create it.
 
 ## Configuration
 
-1. Open the **Configuration** tab of the integration.
-2. Set the **latitude** and **longitude** the demo weather station should
-   observe (they default to Paris), and pick your temperature unit.
-   The **refresh interval** sets how often the weather station and the
-   plug's power are read: every 5 minutes by default, every minute at most.
-3. Save: the devices appear in the **Discovery** tab, ready to be added.
+- **Allowed senders**: the IP addresses of your Wiffis (or a network such as
+  `192.168.1.0/24`, /16 to /32), separated by commas, 16 at most. Empty: any
+  private address of your local network (10.x, 172.16-31.x, 192.168.x, 169.254.x,
+  local IPv6) is accepted. An invalid list refuses **every** telegram until it is
+  corrected (the status gives the position of the wrong entry). Give your Wiffis a
+  fixed IP address in your router. Depending on the Docker network setup, the
+  receiver may see another address than the Wiffi's: the status shows the refused
+  address.
+- **Silent after (minutes)**: 2 to 60, 5 by default. A Wiffi that sends nothing for
+  this long is shown unreachable and named in the status; a sensor without a valid
+  value for this long (while its Wiffi talks) is named too.
 
-The **Prefer the local connection** toggle drives the demo plug: it reports
-the channel it actually uses as a badge (local or cloud), with an orange dot
-when it runs degraded (local refused, cloud fallback).
+## What is published
 
-## Actions
+| Wiffi unit                                           | In Gladys                                 |
+| ---------------------------------------------------- | ----------------------------------------- |
+| `gradC`                                              | temperature (°C), -60 to 100              |
+| `%` whose name holds "feucht" or "humid" (not "abs") | humidity (%)                              |
+| `%` whose name holds "boden" or "soil"               | soil moisture (%)                         |
+| `mb`                                                 | pressure (mbar), 300 to 1200              |
+| `lux`                                                | brightness (lux)                          |
+| `grad`                                               | angle (°), the wind direction for example |
+| `km/h`, `m/s`                                        | speed                                     |
+| boolean whose name holds "regen" or "rain"           | rain sensor                               |
+| boolean whose name holds "beweg", "motion" or "pir"  | motion sensor                             |
+| text (wind direction in letters…)                    | text                                      |
 
-- **Test the weather provider** — performs a live request to Open-Meteo and
-  shows the current temperature and humidity under the button.
-- **Identify a device** — pick one of your devices in the list and it will
-  signal itself (the demo light "blinks" in the logs).
+Nothing is made up:
 
-## Scenes
+- an empty value, `nan`, a text, a comma decimal ("1,5") or a value outside the
+  range of its kind is **not** published (never a 0 instead);
+- another unit (`mm`, `W/m2`, `g/m3`…) or another boolean is not published: the
+  status lists these variables, so they can be added;
+- the network details of the Wiffi (IP address, SSID, Wi-Fi signal) are not
+  published;
+- when the unit of a variable changes, the existing feature is no longer fed and
+  the status says so.
 
-The integration adds its own cards to the scene editor (Gladys 5.1 or
-later), under the **Integrations** category:
+A value received more than a minute ago (kept by the receiver while the integration
+restarted, for example) is published with its date; beyond 2 h, it is not
+published. A telegram older than the last one applied is ignored.
 
-- **Motion detected** (trigger) — starts the scene when a demo motion sensor
-  sees something move. Optionally pick the sensor and what moved (person,
-  animal); left empty, any detection matches. The following actions can
-  read what moved with `{{triggerEvent.data.target}}`.
-- **Identify a device** (action) — makes the chosen device signal itself.
-  It returns whether the device could signal itself, so the following
-  actions can depend on it.
+## Limits of the receiver
 
-## Dashboard
+So that a faulty or hostile device of the network cannot flood Gladys: an address
+not allowed is closed before anything is read; a telegram is cut beyond 64 KB; 16
+connections at most (4 per address, the oldest of the address makes room); a
+connection is closed after 5 s without a byte and 15 s in all, and after 4
+telegrams; 60 telegrams a minute per address (240 in all), the rest is ignored.
+Each refusal is counted in the status for an hour.
 
-Add the **Demo status** widget to a dashboard: it shows the live
-temperature of the weather station and the power of the office plug, the
-connection the plug currently uses (orange when degraded) and the observed
-location. Its **Identify the light** button makes the demo light signal
-itself.
+## Security
 
-## Troubleshooting
+The telegrams travel in clear: never expose the port to the
+Internet. The integration sends nothing to the Wiffis and never commands them.
 
-The integration logs everything it does: check the integration logs from the
-Gladys UI (or `docker logs` on the host) with `LOG_LEVEL=debug` for the full
-detail.
+## Data kept
+
+`/data/wiffi.json` keeps the list of the Wiffis, their features and the time of
+their last telegram (32 Wiffis and 150 features per Wiffi at most), never a value.
+When it cannot be read, it is never written over and it is read again every 10 s.

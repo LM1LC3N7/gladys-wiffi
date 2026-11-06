@@ -1,67 +1,96 @@
-# Template de démonstration
+# Wiffi (stall.biz) pour Gladys
 
-Ceci est la documentation utilisateur de l'intégration. Gladys ré-héberge ce
-fichier et affiche un lien **Documentation** permanent vers lui dans l'écran
-de configuration (dans la langue de l'utilisateur, avec l'anglais en repli) —
-c'est au moment de configurer que l'utilisateur en a le plus besoin. Gardez
-les courtes indications d'accueil dans les blocs `section` du `config_schema`
-du manifest ; mettez ici le pas-à-pas détaillé (captures d'écran, dépannage…).
+Cette intégration lit les capteurs des Wiffis de [stall.biz](https://www.stall.biz)
+(weatherman, rainyman, airsniffer, wiffi-wz…) : température, humidité, pression,
+luminosité, vent, pluie, en local, sans cloud et **en lecture seule**. Chaque Wiffi
+envoie lui-même ses valeurs à Gladys, en télégrammes JSON.
 
-## Ce que vous obtenez
+Intégration non officielle, sans lien avec stall.biz. **Jamais testé avec un vrai
+appareil** : elle suit la bibliothèque de référence `wiffi` 1.1.2 (utilisée par
+Home Assistant) ; vos retours sont bienvenus.
 
-Six appareils de démonstration apparaissent après l'installation : une
-station météo (vraies données Open-Meteo), un interrupteur, une lampe
-variable, une prise connectée avec mesure de puissance, un détecteur de
-mouvement et une caméra.
+## Comment ça marche
+
+Gladys lance à côté de l’intégration un petit récepteur (`wiffi-push`) qui écoute
+un port TCP choisi par Gladys. Le Wiffi ouvre une connexion vers ce port, envoie
+un télégramme JSON terminé par l’octet 0x04, puis ferme. L’intégration lit le
+télégramme, reconnaît le Wiffi par son adresse MAC et publie ses valeurs.
+
+## Mise en place
+
+1. Installez l’intégration, puis **enregistrez** sa configuration une première
+   fois (même vide) : Gladys démarre le récepteur et choisit son port.
+2. Rechargez l’écran de configuration : le port s’affiche dans la section
+   « Réglez chaque Wiffi ».
+3. Dans la page web de chaque Wiffi :
+   - mettez l’adresse de la CCU (« CCU-IP ») à l’**adresse IP de la machine Gladys**
+     sur votre réseau local (pas celle de Gladys Plus ni d’un proxy) ;
+   - mettez le port des télégrammes JSON (paramètre `send_json`) au port affiché ;
+   - choisissez l’envoi **JSON sans en-tête** (un télégramme précédé d’en-têtes HTTP
+     est lu aussi).
+4. Autorisez ce port dans le pare-feu de la machine Gladys s’il y en a un.
+5. Après le premier télégramme, le Wiffi apparaît dans l’onglet **Découverte** :
+   créez-le.
 
 ## Configuration
 
-1. Ouvrez l'onglet **Configuration** de l'intégration.
-2. Renseignez la **latitude** et la **longitude** que la station météo de
-   démonstration doit observer (Paris par défaut), et choisissez votre unité
-   de température. L'**intervalle de rafraîchissement** règle la fréquence
-   de lecture de la station météo et de la puissance de la prise : toutes
-   les 5 minutes par défaut, toutes les minutes au plus.
-3. Enregistrez : les appareils apparaissent dans l'onglet **Découverte**,
-   prêts à être ajoutés.
+- **Expéditeurs autorisés** : les adresses IP de vos Wiffis (ou un réseau comme
+  `192.168.1.0/24`, de /16 à /32), séparées par des virgules, 16 au plus. Vide :
+  toute adresse privée de votre réseau local (10.x, 172.16-31.x, 192.168.x,
+  169.254.x, IPv6 locales) est acceptée. Une liste invalide fait refuser **tous**
+  les télégrammes jusqu’à correction (l’état indique le numéro de l’entrée fautive).
+  Donnez à vos Wiffis une adresse IP fixe dans votre box. Selon la configuration
+  réseau de Docker, le récepteur peut voir une autre adresse que celle du Wiffi :
+  l’état affiche l’adresse refusée.
+- **Muet après (minutes)** : de 2 à 60, 5 par défaut. Un Wiffi qui n’envoie rien
+  pendant cette durée est affiché injoignable et nommé dans l’état ; un capteur
+  sans valeur valable pendant cette durée (alors que son Wiffi parle) est nommé aussi.
 
-Le réglage **Préférer la connexion locale** pilote la prise de
-démonstration : elle affiche en badge le canal réellement utilisé (local ou
-cloud), avec un point orange quand elle fonctionne en mode dégradé (local
-refusé, bascule cloud).
+## Ce qui est publié
 
-## Actions
+| Unité du Wiffi                                                  | Dans Gladys                              |
+| --------------------------------------------------------------- | ---------------------------------------- |
+| `gradC`                                                         | température (°C), de -60 à 100           |
+| `%` dont le nom contient « feucht » ou « humid » (sauf « abs ») | humidité (%)                             |
+| `%` dont le nom contient « boden » ou « soil »                  | humidité du sol (%)                      |
+| `mb`                                                            | pression (mbar), de 300 à 1200           |
+| `lux`                                                           | luminosité (lux)                         |
+| `grad`                                                          | angle (°), direction du vent par exemple |
+| `km/h`, `m/s`                                                   | vitesse                                  |
+| booléen dont le nom contient « regen » ou « rain »              | capteur de pluie                         |
+| booléen dont le nom contient « beweg », « motion » ou « pir »   | détecteur de mouvement                   |
+| texte (direction du vent en lettres…)                           | texte                                    |
 
-- **Tester le fournisseur météo** — effectue une requête en direct vers
-  Open-Meteo et affiche la température et l'humidité actuelles sous le
-  bouton.
-- **Identifier un appareil** — choisissez un de vos appareils dans la liste
-  et il se signale (la lampe de démonstration « clignote » dans les logs).
+Rien n’est inventé :
 
-## Scènes
+- une valeur vide, `nan`, un texte, un nombre à virgule (« 1,5 ») ou hors de la plage
+  de sa nature n’est **pas** publiée (jamais 0 à la place) ;
+- une autre unité (`mm`, `W/m2`, `g/m3`…) ou un autre booléen n’est pas publié :
+  l’état liste ces variables, pour qu’on puisse les ajouter ;
+- les détails réseau du Wiffi (adresse IP, SSID, signal Wi-Fi) ne sont pas publiés ;
+- si l’unité d’une variable change, la fonction existante n’est plus alimentée et
+  l’état le signale.
 
-L'intégration ajoute ses propres cartes à l'éditeur de scènes (Gladys 5.1
-ou plus récent), dans la catégorie **Intégrations** :
+Une valeur reçue il y a plus d’une minute (par exemple gardée par le récepteur
+pendant un redémarrage de l’intégration) est publiée avec sa date ; au-delà de 2 h,
+elle n’est plus publiée. Un télégramme plus ancien que le dernier appliqué est ignoré.
 
-- **Mouvement détecté** (déclencheur) — lance la scène quand un détecteur
-  de démonstration voit bouger quelque chose. Choisissez éventuellement le
-  détecteur et ce qui a bougé (personne, animal) ; laissés vides, toute
-  détection correspond. Les actions suivantes peuvent lire ce qui a bougé
-  avec `{{triggerEvent.data.target}}`.
-- **Identifier un appareil** (action) — fait se signaler l'appareil choisi.
-  Elle indique si l'appareil a pu se signaler, pour que les actions
-  suivantes puissent en dépendre.
+## Limites du récepteur
 
-## Tableau de bord
+Pour qu’un appareil défaillant ou malveillant du réseau ne puisse pas saturer
+Gladys : une adresse non autorisée est coupée avant toute lecture ; un télégramme
+est coupé au-delà de 64 Ko ; 16 connexions au plus (4 par adresse, la plus ancienne
+de l’adresse cède la place) ; une connexion est fermée après 5 s sans octet et 15 s
+au total, et après 4 télégrammes ; 60 télégrammes par minute et par adresse (240 en
+tout), le reste est ignoré. Chaque refus est compté dans l’état pendant une heure.
 
-Ajoutez le widget **État de la démo** à un tableau de bord : il affiche en
-direct la température de la station météo et la puissance de la prise du
-bureau, la connexion utilisée par la prise (en orange si dégradée) et la
-position observée. Son bouton **Identifier la lampe** fait se signaler la
-lampe de démonstration.
+## Sécurité
 
-## Dépannage
+Les télégrammes circulent en clair : n’exposez
+jamais ce port sur Internet. L’intégration n’envoie rien aux Wiffis et ne les commande pas.
 
-L'intégration journalise tout ce qu'elle fait : consultez les logs de
-l'intégration depuis l'interface Gladys (ou `docker logs` sur l'hôte) avec
-`LOG_LEVEL=debug` pour le détail complet.
+## Données conservées
+
+`/data/wiffi.json` garde la liste des Wiffis, leurs fonctions et l’heure de leur
+dernier télégramme (32 Wiffis et 150 fonctions par Wiffi au plus), jamais de valeur.
+S’il est illisible, il n’est jamais réécrit et il est relu toutes les 10 s.
