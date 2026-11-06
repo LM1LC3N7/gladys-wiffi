@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-06
+
 ### Added
 
 - The stall.biz Wiffi sensors (weatherman, rainyman, airsniffer, wiffi-wz…),
@@ -26,3 +28,6 @@ the notes of the version's GitHub Release.
   bounded connections, duration and rate; every refusal counted in the status.
 - A Wiffi silent for the configured delay (5 min by default) is shown
   unreachable and named in the status, as is a sensor without a valid value.
+
+[Unreleased]: https://github.com/LM1LC3N7/gladys-wiffi/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/LM1LC3N7/gladys-wiffi/releases/tag/v0.1.1

@@ -1,6 +1,6 @@
 {
   "name": "gladys-wiffi",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Gladys Assistant external integration for stall.biz Wiffi sensors (weatherman, rainyman, airsniffer...), read only, from the JSON telegrams they send. Unofficial, not affiliated with stall.biz.",
   "type": "module",
